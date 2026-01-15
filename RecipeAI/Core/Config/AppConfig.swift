@@ -45,8 +45,7 @@ enum AppConfig {
         case .debug:
             return "ca-app-pub-3940256099942544/5224354917" // Test Ad Unit ID
         case .release:
-            // TODO: Replace with production Ad Unit ID
-            return ""
+            return "ca-app-pub-5036694200430445/7995805436"
         }
     }
 
@@ -64,21 +63,22 @@ enum AppConfig {
 
     // MARK: - App Limits
 
-    static let maxDailyRecipes = 4
+    static let maxDailyRecipes = 6
     static let maxDailyButtonPresses = 2
+    static let maxDailyCalories = 3
     static let maxFreeHomeRecipeLoads = 10
     static let subscriptionCacheDurationSeconds: TimeInterval = 300 // 5 minutes
 
     // MARK: - HTTP Configuration
 
-    static let httpConnectTimeout: TimeInterval = 30
-    static let httpReadTimeout: TimeInterval = 30
-    static let httpWriteTimeout: TimeInterval = 30
+    static let httpConnectTimeout: TimeInterval = 60
+    static let httpReadTimeout: TimeInterval = 60
+    static let httpWriteTimeout: TimeInterval = 60
 
     // MARK: - URLs
 
-    static let termsURL = URL(string: "https://recipe-ai.io/terms")!
-    static let privacyURL = URL(string: "https://recipe-ai.io/privacy")!
+    static let termsURL = URL(string: "https://recipe-ai.io/terms.html")!
+    static let privacyURL = URL(string: "https://recipe-ai.io/privacy.html")!
 
     // MARK: - Deep Links
 
