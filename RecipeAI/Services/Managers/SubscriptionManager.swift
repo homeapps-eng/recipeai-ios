@@ -110,6 +110,18 @@ final class SubscriptionManager: ObservableObject {
         return url
     }
 
+    // MARK: - Sync Subscription
+
+    /// Manually syncs subscription status from Stripe (useful after checkout)
+    func syncSubscription(userId: String) async throws {
+        let _: SyncSubscriptionResponse = try await NetworkManager.shared.post(
+            endpoint: .syncSubscription(userId: userId),
+            body: EmptyRequest()
+        )
+        // After sync, fetch the updated status
+        await fetchStatus(userId: userId, forceRefresh: true)
+    }
+
     // MARK: - Cancel Subscription
 
     func cancelSubscription(userId: String) async throws {

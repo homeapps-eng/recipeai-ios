@@ -29,6 +29,9 @@ struct SignInView: View {
 
                     // Sign Up Link
                     signUpLink
+
+                    // Terms
+                    termsSection
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 32)
@@ -142,8 +145,8 @@ struct SignInView: View {
                 }
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "g.circle.fill")
-                        .font(.title2)
+                    GoogleLogo()
+                        .frame(width: 20, height: 20)
                     Text("Continue with Google")
                 }
             }
@@ -152,6 +155,7 @@ struct SignInView: View {
             // Apple Sign In
             SignInWithAppleButton(.signIn) { request in
                 request.requestedScopes = [.email, .fullName]
+                request.nonce = AuthManager.shared.prepareAppleSignIn()
             } onCompletion: { result in
                 Task {
                     await viewModel.handleAppleSignIn(result: result)
@@ -180,6 +184,95 @@ struct SignInView: View {
             }
         }
         .padding(.top, 8)
+    }
+
+    // MARK: - Terms
+
+    private var termsSection: some View {
+        VStack(spacing: 4) {
+            Text("By continuing, you agree to our")
+                .font(.appCaption1)
+                .foregroundColor(.textSecondary)
+
+            HStack(spacing: 4) {
+                Link("Terms of Service", destination: AppConfig.termsURL)
+                    .font(.appCaption1)
+                    .foregroundColor(.brandGreen)
+
+                Text("and")
+                    .font(.appCaption1)
+                    .foregroundColor(.textSecondary)
+
+                Link("Privacy Policy", destination: AppConfig.privacyURL)
+                    .font(.appCaption1)
+                    .foregroundColor(.brandGreen)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .padding(.top, 16)
+    }
+}
+
+// MARK: - Google Logo
+
+struct GoogleLogo: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let size = min(geometry.size.width, geometry.size.height)
+
+            Canvas { context, canvasSize in
+                let center = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
+                let outerRadius = size / 2
+                let innerRadius = outerRadius * 0.55
+                let strokeWidth = outerRadius - innerRadius
+                let midRadius = (outerRadius + innerRadius) / 2
+
+                // Google brand colors
+                let blue = Color(red: 66/255, green: 133/255, blue: 244/255)
+                let red = Color(red: 234/255, green: 67/255, blue: 53/255)
+                let yellow = Color(red: 251/255, green: 188/255, blue: 5/255)
+                let green = Color(red: 52/255, green: 168/255, blue: 83/255)
+
+                // Blue arc - bottom right (0° to 90°, where 0° is 3 o'clock)
+                var bluePath = Path()
+                bluePath.addArc(center: center, radius: midRadius,
+                               startAngle: .degrees(0), endAngle: .degrees(90),
+                               clockwise: false)
+                context.stroke(bluePath, with: .color(blue), style: StrokeStyle(lineWidth: strokeWidth, lineCap: .butt))
+
+                // Green arc - bottom left (90° to 180°)
+                var greenPath = Path()
+                greenPath.addArc(center: center, radius: midRadius,
+                                startAngle: .degrees(90), endAngle: .degrees(180),
+                                clockwise: false)
+                context.stroke(greenPath, with: .color(green), style: StrokeStyle(lineWidth: strokeWidth, lineCap: .butt))
+
+                // Yellow arc - top left (180° to 270°)
+                var yellowPath = Path()
+                yellowPath.addArc(center: center, radius: midRadius,
+                                 startAngle: .degrees(180), endAngle: .degrees(270),
+                                 clockwise: false)
+                context.stroke(yellowPath, with: .color(yellow), style: StrokeStyle(lineWidth: strokeWidth, lineCap: .butt))
+
+                // Red arc - top right, partial (270° to 315° - leaves gap for G opening)
+                var redPath = Path()
+                redPath.addArc(center: center, radius: midRadius,
+                              startAngle: .degrees(270), endAngle: .degrees(315),
+                              clockwise: false)
+                context.stroke(redPath, with: .color(red), style: StrokeStyle(lineWidth: strokeWidth, lineCap: .butt))
+
+                // Blue horizontal bar (the stem of the G)
+                let barHeight = strokeWidth
+                var barPath = Path()
+                barPath.addRect(CGRect(
+                    x: center.x,
+                    y: center.y - barHeight/2,
+                    width: outerRadius,
+                    height: barHeight
+                ))
+                context.fill(barPath, with: .color(blue))
+            }
+        }
     }
 }
 

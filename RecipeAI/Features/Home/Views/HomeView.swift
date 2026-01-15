@@ -7,6 +7,9 @@ struct HomeView: View {
     @State private var showCalories = false
     @State private var generatedRecipes: [Recipe] = []
     @State private var caloriesResponse: CaloriesResponse?
+    @State private var hasLoadedRecipe = false
+    @State private var showRefreshError = false
+    @State private var refreshErrorMessage = ""
 
     var body: some View {
         NavigationStack {
@@ -19,9 +22,6 @@ struct HomeView: View {
             }
             .navigationTitle("RecipeAI")
             .navigationBarTitleDisplayMode(.large)
-            .refreshable {
-                await viewModel.refreshRecipe()
-            }
             .sheet(isPresented: $showCamera) {
                 CameraView(
                     onRecipesGenerated: { recipes in
@@ -44,8 +44,12 @@ struct HomeView: View {
                     CaloriesView(caloriesResponse: response)
                 }
             }
-            .task {
-                await viewModel.loadDailyRecipe()
+            .onAppear {
+                guard !hasLoadedRecipe else { return }
+                hasLoadedRecipe = true
+                Task {
+                    await viewModel.loadDailyRecipe()
+                }
             }
         }
     }
@@ -64,14 +68,40 @@ struct HomeView: View {
                 } else {
                     emptySection
                 }
-
-                // Usage Info for Free Users
-                if !SubscriptionManager.shared.isPremium {
-                    usageInfoSection
-                }
             }
             .padding()
             .padding(.bottom, 80) // Space for FAB
+        }
+        .refreshable {
+            // Start refresh in background task and return immediately
+            // This hides the pull-to-refresh spinner quickly
+            // App's custom loading indicator will show instead
+            Task { @MainActor in
+                await viewModel.refreshRecipe()
+                // Show alert if refresh failed but we still have old recipe
+                if let error = viewModel.error, viewModel.dailyRecipe != nil {
+                    refreshErrorMessage = error.userFriendlyMessage
+                    showRefreshError = true
+                }
+            }
+        }
+        .alert("Couldn't Refresh", isPresented: $showRefreshError) {
+            Button("OK") {}
+        } message: {
+            Text(refreshErrorMessage)
+        }
+        .alert("Daily Limit Reached", isPresented: $viewModel.showAdPrompt) {
+            Button("Watch Ad") {
+                viewModel.watchAdAndContinue()
+            }
+            Button("Upgrade to Premium") {
+                // Navigate to subscription - handled via notification or navigation
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.dismissAdPrompt()
+            }
+        } message: {
+            Text("You've reached your daily limit. Watch a short ad to continue or upgrade to Premium for unlimited access.")
         }
     }
 
@@ -180,7 +210,7 @@ struct HomeView: View {
 
     private func errorSection(_ error: Error) -> some View {
         VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle")
+            Image(systemName: error.isNetworkUnavailable ? "wifi.slash" : "exclamationmark.triangle")
                 .font(.system(size: 50))
                 .foregroundColor(.statusOrange)
 
@@ -188,7 +218,7 @@ struct HomeView: View {
                 .font(.appHeadline)
                 .foregroundColor(.textPrimary)
 
-            Text(error.localizedDescription)
+            Text(error.userFriendlyMessage)
                 .font(.appSubheadline)
                 .foregroundColor(.textSecondary)
                 .multilineTextAlignment(.center)
@@ -202,33 +232,6 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
-    }
-
-    // MARK: - Usage Info
-
-    private var usageInfoSection: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("Daily Recipe Limit")
-                    .font(.appSubheadline)
-                    .foregroundColor(.textSecondary)
-
-                Spacer()
-
-                Text("\(RecipeUsageTracker.shared.remainingRecipes)/\(AppConfig.maxDailyRecipes)")
-                    .font(.poppinsSemiBold(size: 15))
-                    .foregroundColor(.brandGreen)
-            }
-
-            ProgressView(
-                value: Double(AppConfig.maxDailyRecipes - RecipeUsageTracker.shared.remainingRecipes),
-                total: Double(AppConfig.maxDailyRecipes)
-            )
-            .tint(.brandGreen)
-        }
-        .padding()
-        .background(Color.backgroundSecondary)
-        .cornerRadius(12)
     }
 
     // MARK: - Camera FAB

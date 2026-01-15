@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct FoodPreferencesView: View {
     var onComplete: () -> Void
@@ -81,9 +82,11 @@ struct FoodPreferencesView: View {
             viewModel.toggleCategory(category)
         } label: {
             VStack(spacing: 12) {
-                Image(systemName: category.systemIcon)
-                    .font(.system(size: 40))
-                    .foregroundColor(isSelected ? .white : .brandGreen)
+                Image(category.imageName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 50, height: 50)
+                    .clipShape(Circle())
 
                 Text(category.displayName)
                     .font(.appHeadline)

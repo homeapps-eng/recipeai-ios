@@ -13,6 +13,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Configure Firebase
         FirebaseApp.configure()
 
+        // Configure AdMob
+        AdManager.shared.configure()
+
         // Request notification permissions
         UNUserNotificationCenter.current().delegate = self
         requestNotificationPermissions(application)

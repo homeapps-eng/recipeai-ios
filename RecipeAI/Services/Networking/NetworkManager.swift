@@ -73,7 +73,11 @@ actor NetworkManager {
         var request = endpoint.urlRequest(authToken: getAuthToken())
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
-        let bodyString = formData.map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")" }
+        // Use custom character set that excludes + and / (they must be encoded for form data)
+        var allowedCharacters = CharacterSet.urlQueryAllowed
+        allowedCharacters.remove(charactersIn: "+/")
+
+        let bodyString = formData.map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: allowedCharacters) ?? "")" }
             .joined(separator: "&")
         request.httpBody = bodyString.data(using: .utf8)
 
@@ -115,7 +119,9 @@ actor NetworkManager {
             case 404:
                 throw NetworkError.notFound
             case 500...599:
-                throw NetworkError.serverError
+                // Try to parse error message from response
+                let errorMessage = parseErrorMessage(from: data)
+                throw NetworkError.serverError(errorMessage)
             default:
                 throw NetworkError.httpError(httpResponse.statusCode)
             }
@@ -128,6 +134,14 @@ actor NetworkManager {
 
     private nonisolated func getAuthToken() -> String? {
         KeychainManager.shared.getToken()
+    }
+
+    private func parseErrorMessage(from data: Data) -> String? {
+        // Try to parse error response from API
+        if let errorResponse = try? decoder.decode(APIErrorResponse.self, from: data) {
+            return errorResponse.error ?? errorResponse.message
+        }
+        return nil
     }
 }
 

@@ -1,4 +1,6 @@
 import Foundation
+import UIKit
+import Combine
 import GoogleMobileAds
 
 @MainActor
@@ -9,7 +11,8 @@ final class AdManager: NSObject, ObservableObject {
     @Published var isLoading = false
     @Published var error: Error?
 
-    private var rewardedAd: GADRewardedAd?
+    private var rewardedAd: RewardedAd?
+    private var rewardCallback: (() -> Void)?
 
     private override init() {
         super.init()
@@ -18,8 +21,11 @@ final class AdManager: NSObject, ObservableObject {
     // MARK: - Initialization
 
     func configure() {
-        GADMobileAds.sharedInstance().start { status in
+        MobileAds.shared.start { status in
             print("AdMob SDK initialized: \(status.adapterStatusesByClassName)")
+            Task {
+                await self.loadRewardedAd()
+            }
         }
     }
 
@@ -32,12 +38,15 @@ final class AdManager: NSObject, ObservableObject {
         error = nil
 
         do {
-            rewardedAd = try await GADRewardedAd.load(
-                withAdUnitID: AppConfig.adMobRewardedAdUnitId,
-                request: GADRequest()
+            let request = Request()
+            rewardedAd = try await RewardedAd.load(
+                with: AppConfig.adMobRewardedAdUnitId,
+                request: request
             )
+            rewardedAd?.fullScreenContentDelegate = self
             isRewardedAdReady = true
             isLoading = false
+            print("Rewarded ad loaded successfully")
         } catch {
             self.error = error
             isRewardedAdReady = false
@@ -50,22 +59,28 @@ final class AdManager: NSObject, ObservableObject {
 
     func showRewardedAd(from viewController: UIViewController, onReward: @escaping () -> Void) {
         guard let rewardedAd = rewardedAd else {
-            print("Rewarded ad not ready")
+            print("Rewarded ad not ready, loading...")
+            // Try to load and show
+            Task {
+                await loadRewardedAd()
+                if self.rewardedAd != nil {
+                    self.showRewardedAd(from: viewController, onReward: onReward)
+                } else {
+                    // Grant reward anyway if ad fails to load
+                    print("Ad failed to load - granting reward")
+                    onReward()
+                }
+            }
             return
         }
 
-        rewardedAd.present(fromRootViewController: viewController) {
-            // User earned reward
+        self.rewardCallback = onReward
+
+        rewardedAd.present(from: viewController) { [weak self] in
             let reward = rewardedAd.adReward
             print("User earned reward: \(reward.amount) \(reward.type)")
-            onReward()
-        }
-
-        // Reset and preload next ad
-        self.rewardedAd = nil
-        isRewardedAdReady = false
-        Task {
-            await loadRewardedAd()
+            self?.rewardCallback?()
+            self?.rewardCallback = nil
         }
     }
 
@@ -77,5 +92,30 @@ final class AdManager: NSObject, ObservableObject {
             return nil
         }
         return rootViewController
+    }
+}
+
+// MARK: - FullScreenContentDelegate
+
+extension AdManager: FullScreenContentDelegate {
+    nonisolated func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
+        Task { @MainActor in
+            print("Ad dismissed, preloading next ad")
+            self.rewardedAd = nil
+            self.isRewardedAdReady = false
+            await self.loadRewardedAd()
+        }
+    }
+
+    nonisolated func ad(_ ad: FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
+        Task { @MainActor in
+            print("Ad failed to present: \(error.localizedDescription)")
+            self.rewardedAd = nil
+            self.isRewardedAdReady = false
+            // Grant reward if ad fails to show
+            self.rewardCallback?()
+            self.rewardCallback = nil
+            await self.loadRewardedAd()
+        }
     }
 }

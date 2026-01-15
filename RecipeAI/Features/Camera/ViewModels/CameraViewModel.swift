@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import UIKit
+import Combine
 
 @MainActor
 final class CameraViewModel: NSObject, ObservableObject {
@@ -87,7 +88,7 @@ final class CameraViewModel: NSObject, ObservableObject {
 
         // Check usage limits
         guard RecipeUsageTracker.shared.canGenerateRecipe else {
-            errorMessage = "Daily limit reached. Watch an ad to get more recipes!"
+            errorMessage = "Daily limit reached. Upgrade to Premium for unlimited access!"
             showError = true
             return []
         }
@@ -125,8 +126,9 @@ final class CameraViewModel: NSObject, ObservableObject {
             }
         } catch {
             isLoading = false
-            errorMessage = error.localizedDescription
+            errorMessage = "Unable to generate recipes. Please try again with a clearer photo."
             showError = true
+            print("Recipe generation error: \(error)")
             return []
         }
     }
@@ -135,6 +137,13 @@ final class CameraViewModel: NSObject, ObservableObject {
 
     func calculateCalories() async -> CaloriesResponse? {
         guard let image = capturedImage else { return nil }
+
+        // Check usage limits
+        guard RecipeUsageTracker.shared.canCalculateCalories else {
+            errorMessage = "Daily limit reached. Upgrade to Premium for unlimited access!"
+            showError = true
+            return nil
+        }
 
         isLoading = true
 
@@ -152,6 +161,9 @@ final class CameraViewModel: NSObject, ObservableObject {
             )
 
             if response.success {
+                // Increment usage
+                RecipeUsageTracker.shared.incrementCaloriesCount()
+
                 isLoading = false
                 return response
             } else {
@@ -159,23 +171,28 @@ final class CameraViewModel: NSObject, ObservableObject {
             }
         } catch {
             isLoading = false
-            errorMessage = error.localizedDescription
+            errorMessage = "Unable to calculate calories. Please try again with a clearer photo."
             showError = true
+            print("Calories calculation error: \(error)")
             return nil
         }
     }
 
     // MARK: - Image Processing
 
-    private func imageToBase64(_ image: UIImage, quality: CGFloat = 0.8) -> String? {
+    private func imageToBase64(_ image: UIImage) -> String? {
         // Fix orientation
         let fixedImage = image.fixedOrientation()
 
-        // Compress image
-        guard let imageData = fixedImage.jpegData(compressionQuality: quality) else {
+        // Resize image to max 512px for Gemini API
+        let resizedImage = fixedImage.resizedForAPI(maxDimension: 512)
+
+        // Compress with lower quality to reduce size
+        guard let imageData = resizedImage.jpegData(compressionQuality: 0.6) else {
             return nil
         }
 
+        print("Image size: \(imageData.count / 1024) KB")
         return imageData.base64EncodedString()
     }
 
@@ -243,5 +260,18 @@ extension UIImage {
         UIGraphicsEndImageContext()
 
         return normalizedImage ?? self
+    }
+
+    func resizedForAPI(maxDimension: CGFloat) -> UIImage {
+        let currentMax = max(size.width, size.height)
+        guard currentMax > maxDimension else { return self }
+
+        let scale = maxDimension / currentMax
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: newSize))
+        }
     }
 }

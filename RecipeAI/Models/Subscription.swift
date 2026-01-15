@@ -107,6 +107,12 @@ struct CustomerPortalResponse: Codable {
 // MARK: - Cancel Subscription Response
 
 struct CancelSubscriptionResponse: Codable {
-    let success: Bool
+    let success: Bool?
+    let message: String?
+}
+
+// MARK: - Sync Subscription Response
+
+struct SyncSubscriptionResponse: Codable {
     let message: String?
 }

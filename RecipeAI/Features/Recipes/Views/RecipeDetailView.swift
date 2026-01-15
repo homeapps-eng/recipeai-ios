@@ -34,7 +34,9 @@ struct RecipeDetailView: View {
                     instructionsSection(instructions)
                 }
             }
+            .padding(.bottom, 20)
         }
+        .scrollIndicators(.hidden)
         .navigationTitle(recipe.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -64,26 +66,29 @@ struct RecipeDetailView: View {
     // MARK: - Recipe Image
 
     private var recipeImage: some View {
-        Group {
-            if let imageUrl = recipe.imageUrl, let url = URL(string: imageUrl) {
-                AsyncImage(url: url) { image in
-                    image
+        GeometryReader { geometry in
+            Group {
+                if let imageUrl = recipe.imageUrl, let url = URL(string: imageUrl) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        placeholderImage
+                    }
+                } else if let path = recipe.capturedImagePath,
+                          let uiImage = UIImage(contentsOfFile: path) {
+                    Image(uiImage: uiImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                } placeholder: {
+                } else {
                     placeholderImage
                 }
-            } else if let path = recipe.capturedImagePath,
-                      let uiImage = UIImage(contentsOfFile: path) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                placeholderImage
             }
+            .frame(width: geometry.size.width, height: 250)
+            .clipped()
         }
         .frame(height: 250)
-        .clipped()
     }
 
     private var placeholderImage: some View {
@@ -114,12 +119,13 @@ struct RecipeDetailView: View {
     // MARK: - Meta Info
 
     private var metaInfo: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: 16) {
             metaItem(icon: "clock", title: "Time", value: recipe.cookingTime)
             metaItem(icon: "person.2", title: "Servings", value: recipe.servings)
             metaItem(icon: "chart.bar", title: "Difficulty", value: recipe.difficulty)
         }
         .padding()
+        .frame(maxWidth: .infinity)
         .background(Color.backgroundSecondary)
     }
 
@@ -136,6 +142,9 @@ struct RecipeDetailView: View {
             Text(value)
                 .font(.poppinsSemiBold(size: 14))
                 .foregroundColor(.textPrimary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
     }
@@ -160,10 +169,12 @@ struct RecipeDetailView: View {
                         Text(convertMeasurement(ingredient))
                             .font(.appBody)
                             .foregroundColor(.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.backgroundSecondary)
             .cornerRadius(12)
             .padding(.horizontal)
@@ -192,10 +203,12 @@ struct RecipeDetailView: View {
                         Text(convertMeasurement(instruction))
                             .font(.appBody)
                             .foregroundColor(.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.backgroundSecondary)
             .cornerRadius(12)
             .padding(.horizontal)

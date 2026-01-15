@@ -3,10 +3,13 @@ import SwiftData
 
 struct FavoritesView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \FavoriteRecipe.dateSaved, order: .reverse) private var favoriteRecipes: [FavoriteRecipe]
     @State private var viewMode: ViewMode = .list
     @State private var selectedDate = Date()
-    @State private var favorites: [Recipe] = []
-    @State private var datesWithFavorites: Set<Date> = []
+
+    private var favorites: [Recipe] {
+        favoriteRecipes.map { $0.toRecipe() }
+    }
 
     private var favoritesRepo: FavoritesRepository {
         FavoritesRepository(modelContext: modelContext)
@@ -38,9 +41,6 @@ struct FavoritesView: View {
         }
         .navigationTitle("Favorites")
         .navigationBarTitleDisplayMode(.large)
-        .onAppear {
-            loadFavorites()
-        }
     }
 
     // MARK: - List View
@@ -78,9 +78,6 @@ struct FavoritesView: View {
             .datePickerStyle(.graphical)
             .tint(.brandGreen)
             .padding(.horizontal)
-            .onChange(of: selectedDate) { _, newDate in
-                loadFavoritesForDate(newDate)
-            }
 
             // Favorites for selected date
             let dateFavorites = favoritesRepo.fetchFavoritesByDate(selectedDate)
@@ -177,17 +174,6 @@ struct FavoritesView: View {
         .cornerRadius(12)
     }
 
-    // MARK: - Data Loading
-
-    private func loadFavorites() {
-        favoritesRepo.fetchAllFavorites()
-        favorites = favoritesRepo.favorites
-        datesWithFavorites = favoritesRepo.getDatesWithFavorites()
-    }
-
-    private func loadFavoritesForDate(_ date: Date) {
-        // This triggers UI update via state
-    }
 }
 
 #Preview {

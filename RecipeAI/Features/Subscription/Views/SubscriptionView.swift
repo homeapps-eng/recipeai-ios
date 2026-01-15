@@ -2,14 +2,17 @@ import SwiftUI
 import SafariServices
 
 struct SubscriptionView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var userDefaults: UserDefaultsManager
-    @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @ObservedObject private var subscriptionManager = SubscriptionManager.shared
     @State private var selectedPlan: PricingPlan?
-    @State private var showSafari = false
-    @State private var safariURL: URL?
+    @State private var safariURL: IdentifiableURL?
     @State private var showCancelConfirmation = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var didOpenCheckout = false
+    @State private var refreshID = UUID()
+    @State private var isRefreshingAfterPayment = false
 
     var body: some View {
         ScrollView {
@@ -18,7 +21,7 @@ struct SubscriptionView: View {
                 headerSection
 
                 // Status (if premium)
-                if subscriptionManager.isPremium {
+                if subscriptionManager.subscriptionStatus?.isPremium == true {
                     statusSection
                 } else {
                     // Features
@@ -32,12 +35,13 @@ struct SubscriptionView: View {
                 }
 
                 // Manage Subscription
-                if subscriptionManager.isPremium {
+                if subscriptionManager.subscriptionStatus?.isPremium == true {
                     manageSection
                 }
             }
             .padding()
         }
+        .id(refreshID)
         .navigationTitle("Subscription")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -46,10 +50,39 @@ struct SubscriptionView: View {
                 await subscriptionManager.fetchStatus(userId: userId, forceRefresh: true)
             }
         }
-        .sheet(isPresented: $showSafari) {
-            if let url = safariURL {
-                SafariView(url: url)
+        .onReceive(NotificationCenter.default.publisher(for: .subscriptionPaymentSuccess)) { _ in
+            // Close Safari sheet and refresh subscription status with retry
+            safariURL = nil
+            didOpenCheckout = false
+            Task {
+                await refreshStatusWithRetry()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .subscriptionPaymentCancelled)) { _ in
+            // Close Safari sheet
+            safariURL = nil
+            didOpenCheckout = false
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            // Refresh subscription status when returning to app after checkout
+            if newPhase == .active && didOpenCheckout {
+                didOpenCheckout = false
+                safariURL = nil
+                Task {
+                    await refreshStatusWithRetry()
+                }
+            }
+        }
+        .sheet(item: $safariURL, onDismiss: {
+            // Refresh status when Safari sheet is dismissed
+            if didOpenCheckout {
+                didOpenCheckout = false
+                Task {
+                    await refreshStatusWithRetry()
+                }
+            }
+        }) { item in
+            SafariView(url: item.url)
         }
         .alert("Error", isPresented: $showError) {
             Button("OK") {}
@@ -64,7 +97,7 @@ struct SubscriptionView: View {
         } message: {
             Text("Your subscription will remain active until the end of your billing period.")
         }
-        .loadingOverlay(isLoading: subscriptionManager.isLoading)
+        .loadingOverlay(isLoading: subscriptionManager.isLoading || isRefreshingAfterPayment)
     }
 
     // MARK: - Header Section
@@ -75,7 +108,7 @@ struct SubscriptionView: View {
                 .font(.system(size: 50))
                 .foregroundColor(.yellow)
 
-            if subscriptionManager.isPremium {
+            if subscriptionManager.subscriptionStatus?.isPremium == true {
                 Text("Premium Member")
                     .font(.appTitle1)
                     .foregroundColor(.textPrimary)
@@ -248,12 +281,16 @@ struct SubscriptionView: View {
             .buttonStyle(.secondary)
 
             if subscriptionManager.subscriptionStatus?.cancelAtPeriodEnd != true {
-                Button {
+                Button(role: .destructive) {
                     showCancelConfirmation = true
                 } label: {
                     Text("Cancel Subscription")
-                        .foregroundColor(.red)
+                        .font(.appButton)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
                 }
+                .buttonStyle(.bordered)
+                .tint(.red)
             }
         }
     }
@@ -261,8 +298,17 @@ struct SubscriptionView: View {
     // MARK: - Actions
 
     private func subscribe() {
-        guard let plan = selectedPlan,
-              let userId = userDefaults.userId else { return }
+        guard let plan = selectedPlan else {
+            errorMessage = "Please select a plan first."
+            showError = true
+            return
+        }
+
+        guard let userId = userDefaults.userId else {
+            errorMessage = "Please sign in to subscribe."
+            showError = true
+            return
+        }
 
         Task {
             do {
@@ -270,25 +316,28 @@ struct SubscriptionView: View {
                     userId: userId,
                     priceId: plan.priceId
                 )
-                safariURL = url
-                showSafari = true
+                didOpenCheckout = true
+                safariURL = IdentifiableURL(url: url)
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = "Unable to start checkout. Please try again."
                 showError = true
             }
         }
     }
 
     private func openCustomerPortal() {
-        guard let userId = userDefaults.userId else { return }
+        guard let userId = userDefaults.userId else {
+            errorMessage = "Unable to load subscription settings."
+            showError = true
+            return
+        }
 
         Task {
             do {
                 let url = try await subscriptionManager.getCustomerPortalURL(userId: userId)
-                safariURL = url
-                showSafari = true
+                safariURL = IdentifiableURL(url: url)
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = "Unable to open subscription settings. Please try again."
                 showError = true
             }
         }
@@ -300,12 +349,74 @@ struct SubscriptionView: View {
         Task {
             do {
                 try await subscriptionManager.cancelSubscription(userId: userId)
+                // Refresh status after successful cancellation
+                await subscriptionManager.fetchStatus(userId: userId, forceRefresh: true)
+                refreshID = UUID()
             } catch {
                 errorMessage = error.localizedDescription
                 showError = true
             }
         }
     }
+
+    /// Sync subscription from Stripe and refresh status
+    private func refreshStatusWithRetry() async {
+        guard let userId = userDefaults.userId else { return }
+
+        isRefreshingAfterPayment = true
+
+        // Wait a moment for Stripe to process
+        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+
+        // Try to sync subscription from Stripe (this pulls directly from Stripe API)
+        do {
+            try await subscriptionManager.syncSubscription(userId: userId)
+        } catch {
+            // If sync fails, just fetch status (webhook might have processed)
+            await subscriptionManager.fetchStatus(userId: userId, forceRefresh: true)
+        }
+
+        // Check if we got premium status
+        if subscriptionManager.subscriptionStatus?.isPremium == true {
+            await MainActor.run {
+                refreshID = UUID()
+                isRefreshingAfterPayment = false
+            }
+            return
+        }
+
+        // If still not premium, retry a few more times
+        for attempt in 1...3 {
+            try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 1_000_000_000)
+
+            do {
+                try await subscriptionManager.syncSubscription(userId: userId)
+            } catch {
+                await subscriptionManager.fetchStatus(userId: userId, forceRefresh: true)
+            }
+
+            if subscriptionManager.subscriptionStatus?.isPremium == true {
+                await MainActor.run {
+                    refreshID = UUID()
+                    isRefreshingAfterPayment = false
+                }
+                return
+            }
+        }
+
+        // After all retries, update the view anyway
+        await MainActor.run {
+            refreshID = UUID()
+            isRefreshingAfterPayment = false
+        }
+    }
+}
+
+// MARK: - Identifiable URL Wrapper
+
+struct IdentifiableURL: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 // MARK: - Safari View

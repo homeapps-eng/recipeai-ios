@@ -51,6 +51,7 @@ enum APIEndpoint {
     case getSubscriptionStatus(userId: String)
     case cancelSubscription(userId: String)
     case getCustomerPortal(userId: String)
+    case syncSubscription(userId: String)
 
     // MARK: - Support
 
@@ -113,6 +114,8 @@ enum APIEndpoint {
             return "/api/v1/subscriptions/\(userId)/cancel"
         case .getCustomerPortal(let userId):
             return "/api/v1/subscriptions/\(userId)/portal"
+        case .syncSubscription(let userId):
+            return "/api/v1/subscriptions/\(userId)/sync"
 
         // Support
         case .submitSupport:
@@ -126,7 +129,7 @@ enum APIEndpoint {
         case .signUp, .signIn, .googleSignIn, .appleSignIn, .verifyToken,
              .generateRecipes, .generateSingleRecipe, .calculateCalories,
              .uploadAvatar, .addFavorite, .createCheckoutSession,
-             .cancelSubscription, .submitSupport:
+             .cancelSubscription, .syncSubscription, .submitSupport:
             return "POST"
 
         // PUT methods
@@ -153,8 +156,14 @@ enum APIEndpoint {
     }
 
     var url: URL {
-        var components = URLComponents(url: APIEndpoint.baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: true)!
-        components.queryItems = queryItems
+        let baseURLString = AppConfig.apiBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let pathString = path.hasPrefix("/") ? path : "/\(path)"
+        let fullURLString = baseURLString + pathString
+
+        var components = URLComponents(string: fullURLString)!
+        if let items = queryItems, !items.isEmpty {
+            components.queryItems = items
+        }
         return components.url!
     }
 

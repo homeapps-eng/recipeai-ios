@@ -3,6 +3,8 @@ import FirebaseAuth
 import AuthenticationServices
 import GoogleSignIn
 import FirebaseCore
+import Combine
+import CryptoKit
 
 @MainActor
 final class AuthManager: ObservableObject {
@@ -14,6 +16,7 @@ final class AuthManager: ObservableObject {
     @Published var error: AuthError?
 
     private var authStateListener: AuthStateDidChangeListenerHandle?
+    private var currentNonce: String?
 
     private init() {
         setupAuthStateListener()
@@ -35,8 +38,8 @@ final class AuthManager: ObservableObject {
                 self?.isLoading = false
 
                 if let user = user {
-                    // Refresh token on auth state change
-                    try? await self?.refreshToken(user: user)
+                    // Refresh token and save user info on auth state change
+                    try? await self?.refreshAndSaveToken(user: user)
                 }
             }
         }
@@ -108,6 +111,14 @@ final class AuthManager: ObservableObject {
                 throw AuthError.missingToken
             }
 
+            // Check if email already exists with a different provider
+            if let email = result.user.profile?.email {
+                let providers = try await Auth.auth().fetchSignInMethods(forEmail: email)
+                if !providers.isEmpty && !providers.contains("google.com") {
+                    throw AuthError.accountExistsWithDifferentProvider(providers: providers)
+                }
+            }
+
             // Send ID token to backend
             let authResponse: AuthResponse = try await NetworkManager.shared.post(
                 endpoint: .googleSignIn,
@@ -116,9 +127,24 @@ final class AuthManager: ObservableObject {
 
             // Sign in with custom token from backend
             let authResult = try await Auth.auth().signIn(withCustomToken: authResponse.token)
-            try await refreshAndSaveToken(user: authResult.user)
+
+            // Save token
+            let token = try await authResult.user.getIDToken()
+            KeychainManager.shared.saveToken(token)
+
+            // Save user info from backend response
+            UserDefaultsManager.shared.saveUserInfo(
+                userId: authResponse.userId,
+                username: authResponse.name,
+                email: authResponse.email,
+                avatarUrl: authResponse.profilePicture
+            )
 
             isLoading = false
+        } catch let error as AuthError {
+            isLoading = false
+            self.error = error
+            throw error
         } catch {
             isLoading = false
             self.error = AuthError.from(error)
@@ -128,42 +154,102 @@ final class AuthManager: ObservableObject {
 
     // MARK: - Apple Sign-In
 
+    /// Generates a nonce for Apple Sign-In and returns the SHA256 hash
+    func prepareAppleSignIn() -> String {
+        let nonce = randomNonceString()
+        currentNonce = nonce
+        return sha256(nonce)
+    }
+
     func handleAppleSignIn(credential: ASAuthorizationAppleIDCredential) async throws {
         guard let identityToken = credential.identityToken,
               let tokenString = String(data: identityToken, encoding: .utf8) else {
             throw AuthError.missingToken
         }
 
+        guard let nonce = currentNonce else {
+            throw AuthError.missingNonce
+        }
+
         let authCode = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+
+        // Get email from credential (only available on first sign-in)
+        let appleEmail = credential.email
 
         isLoading = true
         error = nil
 
         do {
-            // Create Firebase credential
+            // Check if email already exists with a different provider
+            if let email = appleEmail {
+                let providers = try await Auth.auth().fetchSignInMethods(forEmail: email)
+                if !providers.isEmpty && !providers.contains("apple.com") {
+                    // Account exists with different provider - inform user
+                    throw AuthError.accountExistsWithDifferentProvider(providers: providers)
+                }
+            }
+
+            // Create Firebase credential with nonce
             let oAuthCredential = OAuthProvider.credential(
                 providerID: AuthProviderID.apple,
                 idToken: tokenString,
-                rawNonce: nil
+                rawNonce: nonce
             )
 
             // Sign in with Firebase
             let authResult = try await Auth.auth().signIn(with: oAuthCredential)
 
             // Send to backend for user creation/verification
-            let _: AuthResponse = try await NetworkManager.shared.post(
+            let authResponse: AuthResponse = try await NetworkManager.shared.post(
                 endpoint: .appleSignIn,
                 body: AppleSignInRequest(identityToken: tokenString, authorizationCode: authCode)
             )
 
-            try await refreshAndSaveToken(user: authResult.user)
+            // Save token
+            let token = try await authResult.user.getIDToken()
+            KeychainManager.shared.saveToken(token)
 
+            // Save user info from backend response
+            UserDefaultsManager.shared.saveUserInfo(
+                userId: authResponse.userId,
+                username: authResponse.name,
+                email: authResponse.email,
+                avatarUrl: authResponse.profilePicture
+            )
+
+            currentNonce = nil
             isLoading = false
+        } catch let error as AuthError {
+            currentNonce = nil
+            isLoading = false
+            self.error = error
+            throw error
         } catch {
+            currentNonce = nil
             isLoading = false
             self.error = AuthError.from(error)
             throw self.error!
         }
+    }
+
+    // MARK: - Nonce Helpers
+
+    private func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        var randomBytes = [UInt8](repeating: 0, count: length)
+        let errorCode = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+        if errorCode != errSecSuccess {
+            fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+        }
+
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        return String(randomBytes.map { charset[Int($0) % charset.count] })
+    }
+
+    private func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        return hashedData.compactMap { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - Password Reset
@@ -253,12 +339,14 @@ enum AuthError: LocalizedError {
     case configurationError
     case presentationError
     case missingToken
+    case missingNonce
     case notAuthenticated
     case invalidEmail
     case wrongPassword
     case emailAlreadyInUse
     case weakPassword
     case networkError
+    case accountExistsWithDifferentProvider(providers: [String])
     case unknown(String)
 
     var errorDescription: String? {
@@ -268,6 +356,8 @@ enum AuthError: LocalizedError {
         case .presentationError:
             return "Unable to present sign-in screen."
         case .missingToken:
+            return "Authentication failed. Please try again."
+        case .missingNonce:
             return "Authentication failed. Please try again."
         case .notAuthenticated:
             return "You are not signed in."
@@ -281,8 +371,20 @@ enum AuthError: LocalizedError {
             return "Password is too weak. Please use at least 6 characters."
         case .networkError:
             return "Network error. Please check your connection."
+        case .accountExistsWithDifferentProvider(let providers):
+            let providerName = providers.first.map { formatProviderName($0) } ?? "another method"
+            return "An account already exists with this email. Please sign in with \(providerName)."
         case .unknown(let message):
             return message
+        }
+    }
+
+    private func formatProviderName(_ provider: String) -> String {
+        switch provider {
+        case "google.com": return "Google"
+        case "apple.com": return "Apple"
+        case "password": return "email and password"
+        default: return provider
         }
     }
 
@@ -306,6 +408,12 @@ enum AuthError: LocalizedError {
                 return .weakPassword
             case AuthErrorCode.networkError.rawValue:
                 return .networkError
+            case AuthErrorCode.accountExistsWithDifferentCredential.rawValue:
+                // Extract existing providers if available
+                if let providers = nsError.userInfo[AuthErrorUserInfoNameKey] as? [String] {
+                    return .accountExistsWithDifferentProvider(providers: providers)
+                }
+                return .accountExistsWithDifferentProvider(providers: [])
             default:
                 return .unknown(error.localizedDescription)
             }

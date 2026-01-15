@@ -37,47 +37,47 @@ struct ProfileView: View {
 
     private var profileHeader: some View {
         Section {
-            HStack(spacing: 16) {
-                // Avatar
-                if let avatarUrl = userDefaults.avatarUrl,
-                   let url = URL(string: avatarUrl) {
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
+            NavigationLink(destination: EditProfileView()) {
+                HStack(spacing: 16) {
+                    // Avatar
+                    if let avatarUrl = userDefaults.avatarUrl,
+                       let url = URL(string: avatarUrl) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            avatarPlaceholder
+                        }
+                        .frame(width: 70, height: 70)
+                        .clipShape(Circle())
+                    } else {
                         avatarPlaceholder
                     }
-                    .frame(width: 70, height: 70)
-                    .clipShape(Circle())
-                } else {
-                    avatarPlaceholder
-                }
 
-                // User Info
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(userDefaults.username ?? "User")
-                        .font(.appTitle3)
-                        .foregroundColor(.textPrimary)
+                    // User Info
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(userDefaults.username ?? "User")
+                            .font(.appTitle3)
+                            .foregroundColor(.textPrimary)
 
-                    Text(userDefaults.userEmail ?? "")
-                        .font(.appSubheadline)
-                        .foregroundColor(.textSecondary)
+                        Text(userDefaults.userEmail ?? "")
+                            .font(.appSubheadline)
+                            .foregroundColor(.textSecondary)
 
-                    if subscriptionManager.isPremium {
-                        Text("Premium Member")
-                            .font(.appCaption1)
-                            .foregroundColor(.brandGreen)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(Color.brandGreenLight)
-                            .cornerRadius(4)
+                        if subscriptionManager.isPremium {
+                            Text("Premium Member")
+                                .font(.appCaption1)
+                                .foregroundColor(.brandGreen)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Color.brandGreenLight)
+                                .cornerRadius(4)
+                        }
                     }
                 }
-
-                Spacer()
+                .padding(.vertical, 8)
             }
-            .padding(.vertical, 8)
         }
     }
 
