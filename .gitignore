@@ -1,0 +1,63 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+xcuserdata/
+
+# CocoaPods
+Pods/
+!Podfile
+!Podfile.lock
+
+# Carthage
+Carthage/Build/
+Carthage/Checkouts/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDEs
+*.swp
+*.swo
+*~
+.idea/
+*.iml
+
+# Secrets and credentials
+*.p12
+*.p8
+*.mobileprovision
+*.cer
+GoogleService-Info.plist
+
+# Claude
+.claude/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
+
+# Archives
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Environment
+.env
+.env.*
