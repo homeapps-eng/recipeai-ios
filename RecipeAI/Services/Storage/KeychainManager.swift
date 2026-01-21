@@ -6,6 +6,7 @@ final class KeychainManager {
 
     private let service = "com.homeapps.recipeai"
     private let tokenKey = "auth_token"
+    private let guestTokenKey = "guest_token"
 
     private init() {}
 
@@ -26,10 +27,7 @@ final class KeychainManager {
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
 
-        let status = SecItemAdd(query as CFDictionary, nil)
-        if status != errSecSuccess {
-            print("Error saving token to keychain: \(status)")
-        }
+        SecItemAdd(query as CFDictionary, nil)
     }
 
     func getToken() -> String? {
@@ -65,6 +63,66 @@ final class KeychainManager {
 
     func clearToken() {
         deleteToken()
+    }
+
+    // MARK: - Guest Token Management
+
+    func saveGuestToken(_ token: String) {
+        guard let data = token.data(using: .utf8) else { return }
+
+        // Delete existing guest token
+        deleteGuestToken()
+
+        // Add new guest token
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: guestTokenKey,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    func getGuestToken() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: guestTokenKey,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let token = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+
+        return token
+    }
+
+    func deleteGuestToken() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: guestTokenKey
+        ]
+
+        SecItemDelete(query as CFDictionary)
+    }
+
+    func clearGuestToken() {
+        deleteGuestToken()
+    }
+
+    /// Returns the appropriate token (Firebase token first, then guest token)
+    func getActiveToken() -> String? {
+        return getToken() ?? getGuestToken()
     }
 
     // MARK: - Generic Secure Storage

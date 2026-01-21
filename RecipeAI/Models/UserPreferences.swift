@@ -37,6 +37,7 @@ enum FoodCategory: String, CaseIterable, Identifiable {
     case desserts = "desserts"
     case nuts = "nuts"
     case fruits = "fruits"
+    case dairy = "dairy"
 
     var id: String { rawValue }
 
@@ -49,6 +50,7 @@ enum FoodCategory: String, CaseIterable, Identifiable {
         case .desserts: return "Desserts"
         case .nuts: return "Nuts"
         case .fruits: return "Fruits"
+        case .dairy: return "Dairy"
         }
     }
 
@@ -61,6 +63,7 @@ enum FoodCategory: String, CaseIterable, Identifiable {
         case .desserts: return "desserts"
         case .nuts: return "nuts"
         case .fruits: return "fruits"
+        case .dairy: return "dairy"
         }
     }
 
@@ -73,6 +76,7 @@ enum FoodCategory: String, CaseIterable, Identifiable {
         case .desserts: return "birthday.cake"
         case .nuts: return "leaf.circle"
         case .fruits: return "apple.logo"
+        case .dairy: return "drop.fill"
         }
     }
 }

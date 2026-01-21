@@ -7,9 +7,27 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if authManager.isLoading {
+            switch authManager.authState {
+            case .loading:
                 LoadingView()
-            } else if authManager.isAuthenticated {
+
+            case .unauthenticated:
+                SignInView()
+
+            case .guest:
+                // Guest users can skip preferences or complete them
+                if userDefaultsManager.preferencesCompleted || userDefaultsManager.guestPreferencesSkipped {
+                    MainTabView()
+                } else {
+                    GuestPreferencesView(onComplete: {
+                        userDefaultsManager.preferencesCompleted = true
+                    }, onSkip: {
+                        userDefaultsManager.guestPreferencesSkipped = true
+                    })
+                }
+
+            case .authenticated:
+                // Authenticated users must complete preferences
                 if userDefaultsManager.preferencesCompleted {
                     MainTabView()
                 } else {
@@ -17,12 +35,11 @@ struct ContentView: View {
                         userDefaultsManager.preferencesCompleted = true
                     })
                 }
-            } else {
-                SignInView()
             }
         }
-        .animation(.easeInOut, value: authManager.isAuthenticated)
+        .animation(.easeInOut, value: authManager.authState)
         .animation(.easeInOut, value: userDefaultsManager.preferencesCompleted)
+        .animation(.easeInOut, value: userDefaultsManager.guestPreferencesSkipped)
     }
 }
 

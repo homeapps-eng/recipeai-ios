@@ -14,6 +14,8 @@ enum APIEndpoint {
     case googleSignIn
     case appleSignIn
     case verifyToken
+    case guestRegister
+    case guestConvert
 
     // MARK: - Recipe
 
@@ -26,6 +28,7 @@ enum APIEndpoint {
     case getProfile(userId: String)
     case updateProfile(userId: String)
     case uploadAvatar(userId: String)
+    case deleteUser(userId: String)
 
     // MARK: - Favorites
 
@@ -46,12 +49,8 @@ enum APIEndpoint {
 
     // MARK: - Subscription
 
-    case getPricingPlans(currency: String)
-    case createCheckoutSession
     case getSubscriptionStatus(userId: String)
-    case cancelSubscription(userId: String)
-    case getCustomerPortal(userId: String)
-    case syncSubscription(userId: String)
+    case verifyAppleSubscription
 
     // MARK: - Support
 
@@ -72,6 +71,10 @@ enum APIEndpoint {
             return "/api/v1/auth/apple"
         case .verifyToken:
             return "/api/v1/auth/verify"
+        case .guestRegister:
+            return "/api/v1/auth/guest/register"
+        case .guestConvert:
+            return "/api/v1/auth/guest/convert"
 
         // Recipe
         case .generateRecipes:
@@ -86,6 +89,8 @@ enum APIEndpoint {
             return "/api/v1/users/\(userId)/profile"
         case .uploadAvatar(let userId):
             return "/api/v1/users/\(userId)/avatar"
+        case .deleteUser(let userId):
+            return "/api/v1/users/\(userId)/complete"
 
         // Favorites
         case .getFavorites(let userId), .addFavorite(let userId):
@@ -104,18 +109,10 @@ enum APIEndpoint {
             return "/api/v1/users/\(userId)/settings"
 
         // Subscription
-        case .getPricingPlans:
-            return "/api/v1/subscriptions/pricing-plans"
-        case .createCheckoutSession:
-            return "/api/v1/subscriptions/create-checkout-session"
         case .getSubscriptionStatus(let userId):
             return "/api/v1/subscriptions/\(userId)/status"
-        case .cancelSubscription(let userId):
-            return "/api/v1/subscriptions/\(userId)/cancel"
-        case .getCustomerPortal(let userId):
-            return "/api/v1/subscriptions/\(userId)/portal"
-        case .syncSubscription(let userId):
-            return "/api/v1/subscriptions/\(userId)/sync"
+        case .verifyAppleSubscription:
+            return "/api/v1/subscriptions/apple/verify"
 
         // Support
         case .submitSupport:
@@ -127,9 +124,9 @@ enum APIEndpoint {
         switch self {
         // POST methods
         case .signUp, .signIn, .googleSignIn, .appleSignIn, .verifyToken,
+             .guestRegister, .guestConvert,
              .generateRecipes, .generateSingleRecipe, .calculateCalories,
-             .uploadAvatar, .addFavorite, .createCheckoutSession,
-             .cancelSubscription, .syncSubscription, .submitSupport:
+             .uploadAvatar, .addFavorite, .verifyAppleSubscription, .submitSupport:
             return "POST"
 
         // PUT methods
@@ -137,7 +134,7 @@ enum APIEndpoint {
             return "PUT"
 
         // DELETE methods
-        case .removeFavorite:
+        case .removeFavorite, .deleteUser:
             return "DELETE"
 
         // GET methods
@@ -147,12 +144,7 @@ enum APIEndpoint {
     }
 
     var queryItems: [URLQueryItem]? {
-        switch self {
-        case .getPricingPlans(let currency):
-            return [URLQueryItem(name: "currency", value: currency)]
-        default:
-            return nil
-        }
+        return nil
     }
 
     var url: URL {

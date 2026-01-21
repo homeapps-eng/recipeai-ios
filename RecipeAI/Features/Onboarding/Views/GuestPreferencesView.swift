@@ -1,14 +1,18 @@
 import SwiftUI
 import Combine
 
-struct FoodPreferencesView: View {
+struct GuestPreferencesView: View {
     var onComplete: () -> Void
+    var onSkip: () -> Void
 
-    @StateObject private var viewModel = FoodPreferencesViewModel()
+    @StateObject private var viewModel = GuestPreferencesViewModel()
     @State private var currentPage = 0
 
     var body: some View {
         VStack(spacing: 0) {
+            // Header with Skip
+            headerWithSkip
+
             // Progress Indicator
             progressIndicator
 
@@ -31,6 +35,21 @@ struct FoodPreferencesView: View {
         .background(Color.backgroundPrimary)
     }
 
+    // MARK: - Header with Skip
+
+    private var headerWithSkip: some View {
+        HStack {
+            Spacer()
+            Button("Skip") {
+                onSkip()
+            }
+            .font(.appSubheadline)
+            .foregroundColor(.brandGreen)
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+        }
+    }
+
     // MARK: - Progress Indicator
 
     private var progressIndicator: some View {
@@ -42,7 +61,7 @@ struct FoodPreferencesView: View {
             }
         }
         .padding(.horizontal, 24)
-        .padding(.top, 16)
+        .padding(.top, 8)
     }
 
     // MARK: - Categories Page
@@ -55,7 +74,7 @@ struct FoodPreferencesView: View {
                     .font(.appTitle1)
                     .foregroundColor(.textPrimary)
 
-                Text("Select your favorite food categories")
+                Text("Help us personalize your recipes")
                     .font(.appSubheadline)
                     .foregroundColor(.textSecondary)
             }
@@ -183,64 +202,15 @@ struct FoodPreferencesView: View {
     // MARK: - Save and Complete
 
     private func saveAndComplete() {
-        Task {
-            await viewModel.savePreferences()
-            onComplete()
-        }
-    }
-}
-
-// MARK: - Flow Layout
-
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = FlowResult(in: proposal.width ?? 0, subviews: subviews, spacing: spacing)
-        return CGSize(width: proposal.width ?? 0, height: result.height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = FlowResult(in: bounds.width, subviews: subviews, spacing: spacing)
-        for (index, subview) in subviews.enumerated() {
-            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x,
-                                     y: bounds.minY + result.positions[index].y),
-                         proposal: .unspecified)
-        }
-    }
-
-    struct FlowResult {
-        var positions: [CGPoint] = []
-        var height: CGFloat = 0
-
-        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
-            var x: CGFloat = 0
-            var y: CGFloat = 0
-            var rowHeight: CGFloat = 0
-
-            for subview in subviews {
-                let size = subview.sizeThatFits(.unspecified)
-
-                if x + size.width > maxWidth && x > 0 {
-                    x = 0
-                    y += rowHeight + spacing
-                    rowHeight = 0
-                }
-
-                positions.append(CGPoint(x: x, y: y))
-                x += size.width + spacing
-                rowHeight = max(rowHeight, size.height)
-            }
-
-            height = y + rowHeight
-        }
+        viewModel.savePreferencesLocally()
+        onComplete()
     }
 }
 
 // MARK: - ViewModel
 
 @MainActor
-final class FoodPreferencesViewModel: ObservableObject {
+final class GuestPreferencesViewModel: ObservableObject {
     @Published var selectedCategories: Set<String> = []
     @Published var selectedCuisines: Set<String> = []
 
@@ -260,7 +230,7 @@ final class FoodPreferencesViewModel: ObservableObject {
         }
     }
 
-    func savePreferences() async {
+    func savePreferencesLocally() {
         let preferences = UserPreferences(
             userId: UserDefaultsManager.shared.userId,
             categories: Array(selectedCategories),
@@ -270,23 +240,11 @@ final class FoodPreferencesViewModel: ObservableObject {
             allergies: nil
         )
 
-        // Save locally
+        // Save only locally for guest users - no backend sync
         UserDefaultsManager.shared.savePreferences(preferences)
-
-        // Sync with backend
-        if let userId = UserDefaultsManager.shared.userId {
-            do {
-                let _: UserPreferences = try await NetworkManager.shared.put(
-                    endpoint: .updatePreferences(userId: userId),
-                    body: preferences
-                )
-            } catch {
-                // Error syncing preferences
-            }
-        }
     }
 }
 
 #Preview {
-    FoodPreferencesView(onComplete: {})
+    GuestPreferencesView(onComplete: {}, onSkip: {})
 }

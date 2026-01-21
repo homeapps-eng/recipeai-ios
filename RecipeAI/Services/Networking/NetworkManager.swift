@@ -133,7 +133,7 @@ actor NetworkManager {
     }
 
     private nonisolated func getAuthToken() -> String? {
-        KeychainManager.shared.getToken()
+        KeychainManager.shared.getActiveToken()
     }
 
     private func parseErrorMessage(from data: Data) -> String? {

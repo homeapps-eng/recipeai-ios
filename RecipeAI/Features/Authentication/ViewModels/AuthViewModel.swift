@@ -1,6 +1,7 @@
 import Foundation
 import AuthenticationServices
 import Combine
+import UIKit
 
 // MARK: - Sign In ViewModel
 
@@ -65,6 +66,61 @@ final class SignInViewModel: ObservableObject {
                 showError = true
             }
         }
+    }
+
+    func continueAsGuest() async {
+        isLoading = true
+
+        do {
+            try await AuthManager.shared.continueAsGuest()
+            isLoading = false
+        } catch {
+            isLoading = false
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    func triggerAppleSignIn() {
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.email, .fullName]
+        request.nonce = AuthManager.shared.prepareAppleSignIn()
+
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = AppleSignInDelegate.shared
+        controller.presentationContextProvider = AppleSignInDelegate.shared
+
+        // Set callback
+        AppleSignInDelegate.shared.onComplete = { [weak self] result in
+            Task { @MainActor in
+                await self?.handleAppleSignIn(result: result)
+            }
+        }
+
+        controller.performRequests()
+    }
+}
+
+// MARK: - Apple Sign In Delegate
+
+class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    static let shared = AppleSignInDelegate()
+    var onComplete: ((Result<ASAuthorization, Error>) -> Void)?
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            return UIWindow()
+        }
+        return window
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        onComplete?(.success(authorization))
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        onComplete?(.failure(error))
     }
 }
 

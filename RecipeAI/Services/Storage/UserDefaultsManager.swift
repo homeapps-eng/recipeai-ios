@@ -39,6 +39,12 @@ final class UserDefaultsManager: ObservableObject {
         static let dailyRecipeCount = "daily_recipe_count"
         static let dailyButtonPressCount = "daily_button_press_count"
         static let totalHomeRecipeLoads = "total_home_recipe_loads"
+
+        // Guest Mode
+        static let isGuestUser = "is_guest_user"
+        static let deviceId = "device_id"
+        static let guestCreatedAt = "guest_created_at"
+        static let guestPreferencesSkipped = "guest_preferences_skipped"
     }
 
     // MARK: - User Properties
@@ -109,6 +115,30 @@ final class UserDefaultsManager: ObservableObject {
         didSet { defaults.set(isPremium, forKey: Keys.isPremium) }
     }
 
+    // MARK: - Guest Mode Properties
+
+    @Published var isGuestUser: Bool {
+        didSet { defaults.set(isGuestUser, forKey: Keys.isGuestUser) }
+    }
+
+    @Published var deviceId: String {
+        didSet { defaults.set(deviceId, forKey: Keys.deviceId) }
+    }
+
+    @Published var guestCreatedAt: Date? {
+        didSet {
+            if let date = guestCreatedAt {
+                defaults.set(date, forKey: Keys.guestCreatedAt)
+            } else {
+                defaults.removeObject(forKey: Keys.guestCreatedAt)
+            }
+        }
+    }
+
+    @Published var guestPreferencesSkipped: Bool {
+        didSet { defaults.set(guestPreferencesSkipped, forKey: Keys.guestPreferencesSkipped) }
+    }
+
     // MARK: - Initialization
 
     private init() {
@@ -135,19 +165,44 @@ final class UserDefaultsManager: ObservableObject {
 
         // Subscription
         self.isPremium = defaults.bool(forKey: Keys.isPremium)
+
+        // Guest Mode
+        self.isGuestUser = defaults.bool(forKey: Keys.isGuestUser)
+        self.deviceId = defaults.string(forKey: Keys.deviceId) ?? UUID().uuidString
+        self.guestCreatedAt = defaults.object(forKey: Keys.guestCreatedAt) as? Date
+        self.guestPreferencesSkipped = defaults.bool(forKey: Keys.guestPreferencesSkipped)
+
+        // Persist device ID if newly generated
+        if defaults.string(forKey: Keys.deviceId) == nil {
+            defaults.set(self.deviceId, forKey: Keys.deviceId)
+        }
     }
 
     // MARK: - Methods
 
     func saveUserInfo(userId: String, username: String, email: String, avatarUrl: String? = nil) {
         self.isSignedIn = true
+        self.isGuestUser = false
         self.userId = userId
         self.username = username
         self.userEmail = email
         self.avatarUrl = avatarUrl
     }
 
+    func saveGuestUserInfo(userId: String) {
+        self.isSignedIn = true
+        self.isGuestUser = true
+        self.userId = userId
+        self.username = "Guest"
+        self.userEmail = nil
+        self.avatarUrl = nil
+        self.guestCreatedAt = Date()
+    }
+
     func clearAll() {
+        // Save device ID before clearing (we want to preserve it)
+        let savedDeviceId = deviceId
+
         // Clear all stored values
         let domain = Bundle.main.bundleIdentifier!
         defaults.removePersistentDomain(forName: domain)
@@ -168,6 +223,14 @@ final class UserDefaultsManager: ObservableObject {
         recipeSuggestionsEnabled = true
         measurementUnits = .metric
         isPremium = false
+
+        // Guest mode
+        isGuestUser = false
+        guestCreatedAt = nil
+        guestPreferencesSkipped = false
+
+        // Restore device ID
+        deviceId = savedDeviceId
     }
 
     // MARK: - User Preferences

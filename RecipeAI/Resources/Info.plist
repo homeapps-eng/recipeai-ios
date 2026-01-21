@@ -64,7 +64,7 @@
 
     <!-- AdMob App ID -->
     <key>GADApplicationIdentifier</key>
-    <string>ca-app-pub-3940256099942544~3347511713</string>
+    <string>ca-app-pub-5036694200430445~8964952039</string>
 
     <!-- AdMob User Tracking Description -->
     <key>NSUserTrackingUsageDescription</key>

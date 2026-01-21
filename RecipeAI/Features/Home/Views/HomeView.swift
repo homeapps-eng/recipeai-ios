@@ -5,6 +5,7 @@ struct HomeView: View {
     @State private var showCamera = false
     @State private var showRecipes = false
     @State private var showCalories = false
+    @State private var showSubscription = false
     @State private var generatedRecipes: [Recipe] = []
     @State private var caloriesResponse: CaloriesResponse?
     @State private var hasLoadedRecipe = false
@@ -95,13 +96,35 @@ struct HomeView: View {
                 viewModel.watchAdAndContinue()
             }
             Button("Upgrade to Premium") {
-                // Navigate to subscription - handled via notification or navigation
+                viewModel.showAdPrompt = false
+                showSubscription = true
             }
             Button("Cancel", role: .cancel) {
                 viewModel.dismissAdPrompt()
             }
         } message: {
             Text("You've reached your daily limit. Watch a short ad to continue or upgrade to Premium for unlimited access.")
+        }
+        .sheet(isPresented: $showSubscription, onDismiss: {
+            // If user subscribed, try loading recipe again
+            if SubscriptionManager.shared.isPremium && viewModel.dailyRecipe == nil {
+                Task {
+                    await viewModel.loadDailyRecipe()
+                }
+            }
+        }) {
+            NavigationStack {
+                SubscriptionView()
+                    .environmentObject(UserDefaultsManager.shared)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("Close") {
+                                showSubscription = false
+                            }
+                        }
+                    }
+            }
         }
     }
 
@@ -173,16 +196,16 @@ struct HomeView: View {
     // MARK: - Loading Section
 
     private var loadingSection: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.5)
+        VStack(spacing: 20) {
+            // AI Animation
+            AIRecipeLoadingAnimation()
 
-            Text("Loading today's recipe...")
+            Text("AI is preparing your recipe...")
                 .font(.appSubheadline)
                 .foregroundColor(.textSecondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 100)
+        .padding(.vertical, 60)
     }
 
     // MARK: - Empty Section

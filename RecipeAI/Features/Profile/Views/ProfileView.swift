@@ -1,21 +1,34 @@
 import SwiftUI
 
 struct ProfileView: View {
-    @EnvironmentObject var authManager: AuthManager
+    @ObservedObject var authManager = AuthManager.shared
     @EnvironmentObject var userDefaults: UserDefaultsManager
     @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @State private var showGuestConversion = false
+    @State private var refreshID = UUID()
 
     var body: some View {
         NavigationStack {
             List {
                 // Profile Header
-                profileHeader
+                if authManager.isGuest {
+                    guestProfileHeader
+                } else {
+                    profileHeader
+                }
+
+                // Create Account Card for Guests
+                if authManager.isGuest {
+                    createAccountSection
+                }
 
                 // Menu Items
                 menuSection
 
-                // Subscription Section
-                subscriptionSection
+                // Subscription Section (hide for guests)
+                if !authManager.isGuest {
+                    subscriptionSection
+                }
 
                 // Settings & Support
                 settingsSection
@@ -26,10 +39,85 @@ struct ProfileView: View {
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.large)
             .task {
-                if let userId = userDefaults.userId {
+                if let userId = userDefaults.userId, !authManager.isGuest {
                     await subscriptionManager.fetchStatus(userId: userId)
                 }
             }
+            .sheet(isPresented: $showGuestConversion) {
+                GuestConversionView()
+            }
+            .onChange(of: authManager.authState) { _, newState in
+                // Force refresh when auth state changes
+                refreshID = UUID()
+            }
+            .id(refreshID)
+        }
+    }
+
+    // MARK: - Guest Profile Header
+
+    private var guestProfileHeader: some View {
+        Section {
+            HStack(spacing: 16) {
+                // Guest Avatar
+                Circle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 70, height: 70)
+                    .overlay {
+                        Image(systemName: "person.fill")
+                            .font(.title)
+                            .foregroundColor(.gray)
+                    }
+
+                // Guest Info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Guest User")
+                        .font(.appTitle3)
+                        .foregroundColor(.textPrimary)
+
+                    Text("Not signed in")
+                        .font(.appSubheadline)
+                        .foregroundColor(.textSecondary)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+    }
+
+    // MARK: - Create Account Section
+
+    private var createAccountSection: some View {
+        Section {
+            Button {
+                showGuestConversion = true
+            } label: {
+                HStack(spacing: 16) {
+                    Image(systemName: "person.badge.plus")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.brandGreen)
+                        .cornerRadius(10)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Create Free Account")
+                            .font(.appHeadline)
+                            .foregroundColor(.textPrimary)
+
+                        Text("Sync your data across devices")
+                            .font(.appCaption1)
+                            .foregroundColor(.textSecondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.textSecondary)
+                }
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -189,7 +277,11 @@ struct ProfileView: View {
             Button(role: .destructive) {
                 signOut()
             } label: {
-                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                if authManager.isGuest {
+                    Label("Exit Guest Mode", systemImage: "rectangle.portrait.and.arrow.right")
+                } else {
+                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                }
             }
         }
     }
@@ -200,7 +292,7 @@ struct ProfileView: View {
         do {
             try authManager.signOut()
         } catch {
-            print("Error signing out: \(error)")
+            // Error signing out
         }
     }
 }

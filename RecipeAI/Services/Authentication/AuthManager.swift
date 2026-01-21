@@ -6,6 +6,30 @@ import FirebaseCore
 import Combine
 import CryptoKit
 
+// MARK: - Auth State
+
+enum AuthState: Equatable {
+    case loading
+    case unauthenticated
+    case guest(GuestUser)
+    case authenticated(User)
+
+    static func == (lhs: AuthState, rhs: AuthState) -> Bool {
+        switch (lhs, rhs) {
+        case (.loading, .loading):
+            return true
+        case (.unauthenticated, .unauthenticated):
+            return true
+        case (.guest(let lUser), .guest(let rUser)):
+            return lUser == rUser
+        case (.authenticated(let lUser), .authenticated(let rUser)):
+            return lUser == rUser
+        default:
+            return false
+        }
+    }
+}
+
 @MainActor
 final class AuthManager: ObservableObject {
     static let shared = AuthManager()
@@ -14,12 +38,54 @@ final class AuthManager: ObservableObject {
     @Published var isAuthenticated = false
     @Published var isLoading = true
     @Published var error: AuthError?
+    @Published var authState: AuthState = .loading
+
+    // Guest state
+    @Published var guestUser: GuestUser?
+
+    // Computed properties for convenience
+    var isGuest: Bool {
+        if case .guest = authState { return true }
+        return false
+    }
+
+    var isFullyAuthenticated: Bool {
+        if case .authenticated = authState { return true }
+        return false
+    }
+
+    var currentUserId: String? {
+        switch authState {
+        case .guest(let guest):
+            return guest.id
+        case .authenticated:
+            return currentUser?.uid
+        default:
+            return nil
+        }
+    }
 
     private var authStateListener: AuthStateDidChangeListenerHandle?
     private var currentNonce: String?
 
     private init() {
+        checkGuestStatus()
         setupAuthStateListener()
+    }
+
+    private func checkGuestStatus() {
+        let defaults = UserDefaultsManager.shared
+        if defaults.isGuestUser, let userId = defaults.userId {
+            let guest = GuestUser(
+                id: userId,
+                deviceId: defaults.deviceId,
+                createdAt: defaults.guestCreatedAt ?? Date()
+            )
+            guestUser = guest
+            authState = .guest(guest)
+            isAuthenticated = true
+            isLoading = false
+        }
     }
 
     deinit {
@@ -33,13 +99,55 @@ final class AuthManager: ObservableObject {
     private func setupAuthStateListener() {
         authStateListener = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor in
-                self?.currentUser = user
-                self?.isAuthenticated = user != nil
-                self?.isLoading = false
+                guard let self = self else { return }
+
+                self.currentUser = user
+                self.isLoading = false
 
                 if let user = user {
-                    // Refresh token and save user info on auth state change
-                    try? await self?.refreshAndSaveToken(user: user)
+                    // Check if this is a guest user by UID prefix (guest UIDs start with "guest_")
+                    // The UID is the source of truth, not the UserDefaults flag
+                    let isGuestFirebaseUser = user.uid.hasPrefix("guest_")
+
+                    if isGuestFirebaseUser {
+                        // This is a guest user signed in with custom token
+                        // Keep or restore guest state
+                        self.isAuthenticated = true
+                        if self.guestUser == nil {
+                            // Restore guest user from defaults
+                            let defaults = UserDefaultsManager.shared
+                            let guest = GuestUser(
+                                id: user.uid,
+                                deviceId: defaults.deviceId,
+                                createdAt: defaults.guestCreatedAt ?? Date()
+                            )
+                            self.guestUser = guest
+                            self.authState = .guest(guest)
+                        }
+                    } else {
+                        // Authenticated user (not guest)
+                        // Clear any leftover guest state
+                        if UserDefaultsManager.shared.isGuestUser {
+                            UserDefaultsManager.shared.isGuestUser = false
+                            UserDefaultsManager.shared.guestCreatedAt = nil
+                        }
+
+                        self.isAuthenticated = true
+                        self.guestUser = nil
+                        self.authState = .authenticated(user)
+
+                        // Refresh token and save user info on auth state change
+                        try? await self.refreshAndSaveToken(user: user)
+                    }
+                } else {
+                    // Check if we have a guest user
+                    if self.guestUser != nil {
+                        // Keep guest state
+                        self.isAuthenticated = true
+                    } else {
+                        self.isAuthenticated = false
+                        self.authState = .unauthenticated
+                    }
                 }
             }
         }
@@ -54,6 +162,15 @@ final class AuthManager: ObservableObject {
         do {
             let result = try await Auth.auth().signIn(withEmail: email, password: password)
             try await refreshAndSaveToken(user: result.user)
+
+            // Clear guest state
+            clearGuestState()
+
+            // Update auth state explicitly
+            currentUser = result.user
+            authState = .authenticated(result.user)
+            isAuthenticated = true
+
             isLoading = false
         } catch {
             isLoading = false
@@ -78,12 +195,29 @@ final class AuthManager: ObservableObject {
             try await result.user.sendEmailVerification()
 
             try await refreshAndSaveToken(user: result.user)
+
+            // Clear guest state
+            clearGuestState()
+
+            // Update auth state explicitly
+            currentUser = result.user
+            authState = .authenticated(result.user)
+            isAuthenticated = true
+
             isLoading = false
         } catch {
             isLoading = false
             self.error = AuthError.from(error)
             throw self.error!
         }
+    }
+
+    /// Clears all guest-related state
+    private func clearGuestState() {
+        KeychainManager.shared.clearGuestToken()
+        UserDefaultsManager.shared.isGuestUser = false
+        UserDefaultsManager.shared.guestCreatedAt = nil
+        guestUser = nil
     }
 
     // MARK: - Google Sign-In
@@ -132,6 +266,9 @@ final class AuthManager: ObservableObject {
             let token = try await authResult.user.getIDToken()
             KeychainManager.shared.saveToken(token)
 
+            // Clear guest state and update auth state
+            clearGuestState()
+
             // Save user info from backend response
             UserDefaultsManager.shared.saveUserInfo(
                 userId: authResponse.userId,
@@ -139,6 +276,11 @@ final class AuthManager: ObservableObject {
                 email: authResponse.email,
                 avatarUrl: authResponse.profilePicture
             )
+
+            // Update auth state explicitly
+            currentUser = authResult.user
+            authState = .authenticated(authResult.user)
+            isAuthenticated = true
 
             isLoading = false
         } catch let error as AuthError {
@@ -209,6 +351,9 @@ final class AuthManager: ObservableObject {
             let token = try await authResult.user.getIDToken()
             KeychainManager.shared.saveToken(token)
 
+            // Clear guest state
+            clearGuestState()
+
             // Save user info from backend response
             UserDefaultsManager.shared.saveUserInfo(
                 userId: authResponse.userId,
@@ -216,6 +361,11 @@ final class AuthManager: ObservableObject {
                 email: authResponse.email,
                 avatarUrl: authResponse.profilePicture
             )
+
+            // Update auth state explicitly
+            currentUser = authResult.user
+            authState = .authenticated(authResult.user)
+            isAuthenticated = true
 
             currentNonce = nil
             isLoading = false
@@ -252,6 +402,103 @@ final class AuthManager: ObservableObject {
         return hashedData.compactMap { String(format: "%02x", $0) }.joined()
     }
 
+    // MARK: - Guest Mode
+
+    func continueAsGuest() async throws {
+        isLoading = true
+        error = nil
+
+        do {
+            let defaults = UserDefaultsManager.shared
+            let deviceId = defaults.deviceId
+
+            // Register guest with backend - returns a custom token
+            let response: GuestAuthResponse = try await NetworkManager.shared.post(
+                endpoint: .guestRegister,
+                body: GuestRegisterRequest(deviceId: deviceId, platform: "ios")
+            )
+
+            // Exchange custom token for Firebase ID token
+            let authResult = try await Auth.auth().signIn(withCustomToken: response.guestToken)
+
+            // Get the ID token (this is what the backend expects for auth)
+            let idToken = try await authResult.user.getIDToken()
+            KeychainManager.shared.saveToken(idToken)
+
+            // Create guest user object
+            let guest = GuestUser(
+                id: response.userId,
+                deviceId: deviceId,
+                createdAt: Date()
+            )
+
+            // Save guest info
+            defaults.saveGuestUserInfo(userId: response.userId)
+
+            // Update state
+            guestUser = guest
+            authState = .guest(guest)
+            isAuthenticated = true
+            isLoading = false
+        } catch {
+            isLoading = false
+            self.error = AuthError.from(error)
+            throw self.error!
+        }
+    }
+
+    func convertGuestToUser(email: String, password: String, username: String) async throws {
+        guard let guest = guestUser else {
+            throw AuthError.notAuthenticated
+        }
+
+        isLoading = true
+        error = nil
+
+        do {
+            let defaults = UserDefaultsManager.shared
+
+            // Convert guest to registered user via backend
+            let authResponse: AuthResponse = try await NetworkManager.shared.post(
+                endpoint: .guestConvert,
+                body: GuestConvertRequest(
+                    guestDeviceId: guest.deviceId,
+                    email: email,
+                    password: password,
+                    username: username
+                )
+            )
+
+            // Sign in with custom token from backend
+            let authResult = try await Auth.auth().signIn(withCustomToken: authResponse.token)
+
+            // Save Firebase token
+            let token = try await authResult.user.getIDToken()
+            KeychainManager.shared.saveToken(token)
+
+            // Clear all guest state
+            clearGuestState()
+
+            // Save user info
+            defaults.saveUserInfo(
+                userId: authResponse.userId,
+                username: authResponse.name,
+                email: authResponse.email,
+                avatarUrl: authResponse.profilePicture
+            )
+
+            // Update auth state
+            currentUser = authResult.user
+            authState = .authenticated(authResult.user)
+            isAuthenticated = true
+            isLoading = false
+        } catch {
+            isLoading = false
+            self.error = AuthError.from(error)
+            throw self.error!
+        }
+    }
+
     // MARK: - Password Reset
 
     func resetPassword(email: String) async throws {
@@ -272,10 +519,25 @@ final class AuthManager: ObservableObject {
 
     func signOut() throws {
         do {
-            try Auth.auth().signOut()
+            // Sign out from Firebase if authenticated
+            if Auth.auth().currentUser != nil {
+                try Auth.auth().signOut()
+            }
             GIDSignIn.sharedInstance.signOut()
+
+            // Clear all tokens
             KeychainManager.shared.clearToken()
+            KeychainManager.shared.clearGuestToken()
             UserDefaultsManager.shared.clearAll()
+
+            // Post notification to clear all local data (favorites, usage tracker, etc.)
+            NotificationCenter.default.post(name: .userDidSignOut, object: nil)
+
+            // Reset state
+            guestUser = nil
+            currentUser = nil
+            authState = .unauthenticated
+            isAuthenticated = false
         } catch {
             self.error = AuthError.from(error)
             throw self.error!
@@ -285,17 +547,61 @@ final class AuthManager: ObservableObject {
     // MARK: - Delete Account
 
     func deleteAccount() async throws {
+        // Handle guest deletion
+        if let guest = guestUser {
+            isLoading = true
+            error = nil
+
+            do {
+                // Delete guest user data from backend
+                let _: DeleteUserResponse = try await NetworkManager.shared.delete(
+                    endpoint: .deleteUser(userId: guest.id)
+                )
+
+                // Clear local data
+                KeychainManager.shared.clearGuestToken()
+                UserDefaultsManager.shared.clearAll()
+
+                // Update auth state
+                guestUser = nil
+                authState = .unauthenticated
+                isAuthenticated = false
+                isLoading = false
+            } catch {
+                isLoading = false
+                self.error = AuthError.from(error)
+                throw self.error!
+            }
+            return
+        }
+
+        // Handle authenticated user deletion
         guard let user = Auth.auth().currentUser else {
             throw AuthError.notAuthenticated
         }
 
+        let userId = user.uid
         isLoading = true
         error = nil
 
         do {
+            // 1. Delete user data from backend
+            let _: DeleteUserResponse = try await NetworkManager.shared.delete(
+                endpoint: .deleteUser(userId: userId)
+            )
+
+            // 2. Delete Firebase Auth user
             try await user.delete()
+
+            // 3. Clear local data
             KeychainManager.shared.clearToken()
             UserDefaultsManager.shared.clearAll()
+            SubscriptionManager.shared.clear()
+
+            // 4. Update auth state to trigger UI change
+            currentUser = nil
+            authState = .unauthenticated
+            isAuthenticated = false
             isLoading = false
         } catch {
             isLoading = false

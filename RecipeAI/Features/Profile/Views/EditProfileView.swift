@@ -142,7 +142,7 @@ struct EditProfileView: View {
                 }
             }
         } catch {
-            print("Error loading photo: \(error)")
+            // Error loading photo
         }
     }
 

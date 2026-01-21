@@ -30,7 +30,24 @@ struct RecipeAIApp: App {
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .userDidSignOut)) { _ in
+                    clearAllLocalData()
+                }
         }
+    }
+
+    private func clearAllLocalData() {
+        // Clear SwiftData favorites
+        let context = sharedModelContainer.mainContext
+        do {
+            try context.delete(model: FavoriteRecipe.self)
+            try context.save()
+        } catch {
+            // Error clearing SwiftData
+        }
+
+        // Clear usage tracker
+        RecipeUsageTracker.shared.resetAll()
     }
 
     private func handleDeepLink(_ url: URL) {
@@ -53,4 +70,5 @@ struct RecipeAIApp: App {
 extension Notification.Name {
     static let subscriptionPaymentSuccess = Notification.Name("subscriptionPaymentSuccess")
     static let subscriptionPaymentCancelled = Notification.Name("subscriptionPaymentCancelled")
+    static let userDidSignOut = Notification.Name("userDidSignOut")
 }

@@ -27,6 +27,9 @@ struct SignInView: View {
                     // Social Sign In
                     socialSignInButtons
 
+                    // Guest Mode
+                    guestModeSection
+
                     // Sign Up Link
                     signUpLink
 
@@ -152,19 +155,51 @@ struct SignInView: View {
             }
             .buttonStyle(.outline)
 
-            // Apple Sign In
-            SignInWithAppleButton(.signIn) { request in
-                request.requestedScopes = [.email, .fullName]
-                request.nonce = AuthManager.shared.prepareAppleSignIn()
-            } onCompletion: { result in
+            // Apple Sign In - Custom styled to match Google button
+            AppleSignInButton {
+                // Trigger Apple Sign In
+                viewModel.triggerAppleSignIn()
+            }
+        }
+    }
+
+    // MARK: - Guest Mode Section
+
+    private var guestModeSection: some View {
+        VStack(spacing: 12) {
+            // Divider
+            HStack {
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(.gray.opacity(0.3))
+
+                Text("or")
+                    .font(.appFootnote)
+                    .foregroundColor(.textSecondary)
+                    .padding(.horizontal, 16)
+
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(.gray.opacity(0.3))
+            }
+
+            // Continue as Guest Button
+            Button {
                 Task {
-                    await viewModel.handleAppleSignIn(result: result)
+                    await viewModel.continueAsGuest()
+                }
+            } label: {
+                VStack(spacing: 4) {
+                    Text("Continue as Guest")
+                        .font(.appHeadline)
+                    Text("Try the app before creating an account")
+                        .font(.appCaption1)
+                        .foregroundColor(.textSecondary)
                 }
             }
-            .signInWithAppleButtonStyle(.black)
-            .frame(height: 50)
-            .cornerRadius(12)
+            .buttonStyle(.outline)
         }
+        .padding(.top, 8)
     }
 
     // MARK: - Sign Up Link
@@ -210,6 +245,24 @@ struct SignInView: View {
         }
         .multilineTextAlignment(.center)
         .padding(.top, 16)
+    }
+}
+
+// MARK: - Apple Sign In Button
+
+struct AppleSignInButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: "apple.logo")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(.primary)
+                Text("Continue with Apple")
+            }
+        }
+        .buttonStyle(.outline)
     }
 }
 

@@ -4,6 +4,7 @@ import AVFoundation
 struct CameraView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = CameraViewModel()
+    @State private var showSubscription = false
 
     var onRecipesGenerated: ([Recipe]) -> Void
     var onCaloriesCalculated: (CaloriesResponse) -> Void
@@ -51,7 +52,46 @@ struct CameraView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             }
-            .loadingOverlay(isLoading: viewModel.isLoading)
+            .alert("Daily Limit Reached", isPresented: $viewModel.showAdPrompt) {
+                Button("Watch Ad") {
+                    viewModel.watchAdAndContinue(
+                        onRecipesGenerated: { recipes in
+                            onRecipesGenerated(recipes)
+                        },
+                        onCaloriesCalculated: { response in
+                            onCaloriesCalculated(response)
+                        }
+                    )
+                }
+                Button("Upgrade to Premium") {
+                    viewModel.showAdPrompt = false
+                    showSubscription = true
+                }
+                Button("Cancel", role: .cancel) {
+                    viewModel.dismissAdPrompt()
+                }
+            } message: {
+                Text("Watch a short ad to continue or upgrade to Premium for unlimited access.")
+            }
+            .sheet(isPresented: $showSubscription) {
+                NavigationStack {
+                    SubscriptionView()
+                        .environmentObject(UserDefaultsManager.shared)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarLeading) {
+                                Button("Close") {
+                                    showSubscription = false
+                                }
+                            }
+                        }
+                }
+            }
+            .aiLoadingOverlay(
+                isLoading: viewModel.isLoading,
+                mode: viewModel.loadingMode,
+                image: viewModel.capturedImage
+            )
             .onAppear {
                 viewModel.checkCameraPermission()
             }

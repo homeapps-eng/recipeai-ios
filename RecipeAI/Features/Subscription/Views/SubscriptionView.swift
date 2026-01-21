@@ -1,15 +1,13 @@
 import SwiftUI
-import SafariServices
+import StoreKit
 
 struct SubscriptionView: View {
     @EnvironmentObject var userDefaults: UserDefaultsManager
-    @ObservedObject private var subscriptionManager = SubscriptionManager.shared
-    @State private var selectedPlan: PricingPlan?
-    @State private var safariURL: IdentifiableURL?
-    @State private var showCancelConfirmation = false
+    @ObservedObject private var storeKit = StoreKitManager.shared
+    @State private var selectedProduct: Product?
     @State private var showError = false
     @State private var errorMessage = ""
-    @State private var isRefreshingAfterPayment = false
+    @State private var showSuccess = false
 
     var body: some View {
         ScrollView {
@@ -18,8 +16,8 @@ struct SubscriptionView: View {
                 headerSection
 
                 // Show different content based on subscription status
-                if subscriptionManager.subscriptionStatus?.isPremium == true {
-                    // Premium user: show status and manage options
+                if storeKit.isPremium {
+                    // Premium user: show status
                     statusSection
                     manageSection
                 } else {
@@ -27,59 +25,43 @@ struct SubscriptionView: View {
                     featuresSection
                     plansSection
                     subscribeButton
+                    restoreButton
                 }
             }
             .padding()
         }
         .navigationTitle("Subscription")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await loadData()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .subscriptionPaymentSuccess)) { _ in
-            safariURL = nil
-            Task {
-                await handlePaymentSuccess()
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    Task {
+                        await refreshStatus()
+                    }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .subscriptionPaymentCancelled)) { _ in
-            safariURL = nil
-        }
-        .sheet(item: $safariURL) { item in
-            SafariView(url: item.url)
+        .task {
+            await refreshStatus()
+
+            // Auto-select annual product
+            if selectedProduct == nil {
+                selectedProduct = storeKit.annualProduct ?? storeKit.monthlyProduct
+            }
         }
         .alert("Error", isPresented: $showError) {
             Button("OK") {}
         } message: {
             Text(errorMessage)
         }
-        .alert("Cancel Subscription", isPresented: $showCancelConfirmation) {
-            Button("Keep Subscription", role: .cancel) {}
-            Button("Cancel Subscription", role: .destructive) {
-                cancelSubscription()
-            }
+        .alert("Success", isPresented: $showSuccess) {
+            Button("OK") {}
         } message: {
-            Text("Your subscription will remain active until the end of your billing period.")
+            Text("You are now a Premium member!")
         }
-        .loadingOverlay(isLoading: subscriptionManager.isLoading || isRefreshingAfterPayment)
-    }
-
-    // MARK: - Load Data
-
-    private func loadData() async {
-        // Fetch pricing plans
-        await subscriptionManager.fetchPricingPlans()
-
-        // Auto-select annual plan (best value) if none selected
-        if selectedPlan == nil {
-            selectedPlan = subscriptionManager.pricingPlans.first { $0.isAnnual }
-                ?? subscriptionManager.pricingPlans.first
-        }
-
-        // Fetch subscription status
-        if let userId = userDefaults.userId {
-            await subscriptionManager.fetchStatus(userId: userId, forceRefresh: true)
-        }
+        .loadingOverlay(isLoading: storeKit.isLoading)
     }
 
     // MARK: - Header Section
@@ -90,7 +72,7 @@ struct SubscriptionView: View {
                 .font(.system(size: 50))
                 .foregroundColor(.yellow)
 
-            if subscriptionManager.subscriptionStatus?.isPremium == true {
+            if storeKit.isPremium {
                 Text("Premium Member")
                     .font(.appTitle1)
                     .foregroundColor(.textPrimary)
@@ -111,49 +93,127 @@ struct SubscriptionView: View {
 
     private var statusSection: some View {
         VStack(spacing: 16) {
-            if let status = subscriptionManager.subscriptionStatus {
-                // Plan and Status row
+            // Plan and Status row
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Plan")
+                        .font(.appCaption1)
+                        .foregroundColor(.textSecondary)
+                    Text(planDisplayName)
+                        .font(.appHeadline)
+                        .foregroundColor(.textPrimary)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Status")
+                        .font(.appCaption1)
+                        .foregroundColor(.textSecondary)
+                    Text(statusDisplayName)
+                        .font(.appHeadline)
+                        .foregroundColor(statusColor)
+                }
+            }
+
+            // Expiration/Renewal date
+            if let date = displayDate {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Plan")
+                        Text(isExpiring ? "Expires on" : "Renews on")
                             .font(.appCaption1)
                             .foregroundColor(.textSecondary)
-                        Text(status.planName ?? "Premium")
+                        Text(date, style: .date)
                             .font(.appHeadline)
                             .foregroundColor(.textPrimary)
                     }
 
                     Spacer()
-
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("Status")
-                            .font(.appCaption1)
-                            .foregroundColor(.textSecondary)
-                        Text(status.statusType.displayName)
-                            .font(.appHeadline)
-                            .foregroundColor(Color(hex: status.statusType.color))
-                    }
-                }
-
-                // Renewal/Expiration date
-                if let endDate = status.periodEndDate {
-                    HStack {
-                        Text(status.cancelAtPeriodEnd == true ? "Expires on" : "Renews on")
-                            .font(.appSubheadline)
-                            .foregroundColor(.textSecondary)
-
-                        Spacer()
-
-                        Text(endDate, style: .date)
-                            .font(.appSubheadline)
-                            .foregroundColor(.textPrimary)
-                    }
                 }
             }
+
+            // Show message if subscription is expiring
+            if isExpiring {
+                HStack {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.orange)
+                    Text("Your subscription will not renew. You'll lose premium access after the expiration date.")
+                        .font(.appCaption1)
+                        .foregroundColor(.textSecondary)
+                }
+                .padding(.top, 4)
+            }
+
+            #if DEBUG
+            // Debug: Show subscription info
+            VStack(spacing: 4) {
+                Text("DEBUG: \(storeKit.purchasedSubscriptions.count) local subscription(s)")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                if let status = storeKit.subscriptionStatus {
+                    Text("Backend: isActive=\(status.isActive), autoRenew=\(status.autoRenewStatus ?? true)")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+
+                Button("DEBUG: Clear Local Cache") {
+                    storeKit.purchasedSubscriptions = []
+                    storeKit.subscriptionExpirationDate = nil
+                    UserDefaultsManager.shared.isPremium = false
+                }
+                .font(.caption)
+                .foregroundColor(.red)
+            }
+            .padding(.top, 8)
+            #endif
         }
         .padding()
         .background(Color.backgroundSecondary)
         .cornerRadius(12)
+    }
+
+    // MARK: - Status Helpers
+
+    private var planDisplayName: String {
+        // Prefer backend status, fallback to local
+        if let status = storeKit.subscriptionStatus, let planName = status.planName {
+            return planName
+        }
+        return storeKit.purchasedSubscriptions.first?.displayName ?? "Premium"
+    }
+
+    private var isExpiring: Bool {
+        // Check if user cancelled subscription
+        if let status = storeKit.subscriptionStatus {
+            return status.statusType == .expiring
+        }
+        return false
+    }
+
+    private var statusDisplayName: String {
+        if let status = storeKit.subscriptionStatus {
+            return status.statusType.displayName
+        }
+        return "Active"
+    }
+
+    private var statusColor: Color {
+        if let status = storeKit.subscriptionStatus {
+            switch status.statusType {
+            case .active: return .green
+            case .expiring: return .orange
+            case .inactive: return .red
+            }
+        }
+        return .green
+    }
+
+    private var displayDate: Date? {
+        // Prefer backend date
+        if let status = storeKit.subscriptionStatus, let date = status.periodEndDate {
+            return date
+        }
+        return storeKit.subscriptionExpirationDate
     }
 
     // MARK: - Features Section
@@ -190,26 +250,27 @@ struct SubscriptionView: View {
 
     private var plansSection: some View {
         VStack(spacing: 12) {
-            ForEach(subscriptionManager.pricingPlans) { plan in
-                planCard(plan)
+            ForEach(storeKit.products) { product in
+                planCard(product)
             }
         }
     }
 
-    private func planCard(_ plan: PricingPlan) -> some View {
-        let isSelected = selectedPlan?.priceId == plan.priceId
+    private func planCard(_ product: Product) -> some View {
+        let isSelected = selectedProduct?.id == product.id
+        let isAnnual = product.id.contains("annual")
 
         return Button {
-            selectedPlan = plan
+            selectedProduct = product
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text(plan.name)
+                        Text(product.displayName)
                             .font(.appHeadline)
                             .foregroundColor(.textPrimary)
 
-                        if plan.isAnnual {
+                        if isAnnual {
                             Text("Best Value")
                                 .font(.appCaption2)
                                 .foregroundColor(.white)
@@ -220,14 +281,14 @@ struct SubscriptionView: View {
                         }
                     }
 
-                    Text(plan.interval == "month" ? "Billed monthly" : "Billed annually")
+                    Text(product.description)
                         .font(.appCaption1)
                         .foregroundColor(.textSecondary)
                 }
 
                 Spacer()
 
-                Text(plan.displayPrice)
+                Text(product.displayPrice)
                     .font(.appTitle3)
                     .foregroundColor(isSelected ? .brandGreen : .textPrimary)
             }
@@ -246,13 +307,30 @@ struct SubscriptionView: View {
 
     private var subscribeButton: some View {
         Button {
-            subscribe()
+            purchase()
         } label: {
             Text("Subscribe Now")
         }
         .buttonStyle(.primary)
-        .disabled(selectedPlan == nil)
-        .opacity(selectedPlan == nil ? 0.6 : 1)
+        .disabled(selectedProduct == nil)
+        .opacity(selectedProduct == nil ? 0.6 : 1)
+    }
+
+    // MARK: - Restore Button
+
+    private var restoreButton: some View {
+        Button {
+            Task {
+                await storeKit.restorePurchases()
+                if storeKit.isPremium {
+                    showSuccess = true
+                }
+            }
+        } label: {
+            Text("Restore Purchases")
+                .font(.appSubheadline)
+                .foregroundColor(.brandGreen)
+        }
     }
 
     // MARK: - Manage Section
@@ -260,140 +338,61 @@ struct SubscriptionView: View {
     private var manageSection: some View {
         VStack(spacing: 12) {
             Button {
-                openCustomerPortal()
+                openSubscriptionManagement()
             } label: {
                 Text("Manage Subscription")
             }
             .buttonStyle(.secondary)
-
-            if subscriptionManager.subscriptionStatus?.cancelAtPeriodEnd != true {
-                Button(role: .destructive) {
-                    showCancelConfirmation = true
-                } label: {
-                    Text("Cancel Subscription")
-                        .font(.appButton)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                }
-                .buttonStyle(.bordered)
-                .tint(.red)
-            }
         }
     }
 
     // MARK: - Actions
 
-    private func subscribe() {
-        guard let plan = selectedPlan else {
+    private func purchase() {
+        guard let product = selectedProduct else {
             errorMessage = "Please select a plan"
             showError = true
             return
         }
 
-        guard let userId = userDefaults.userId else {
-            errorMessage = "Please sign in to subscribe"
-            showError = true
-            return
-        }
-
         Task {
             do {
-                let url = try await subscriptionManager.createCheckoutSession(
-                    userId: userId,
-                    priceId: plan.priceId
-                )
-                safariURL = IdentifiableURL(url: url)
+                if let result = try await storeKit.purchase(product) {
+                    switch result {
+                    case .success:
+                        showSuccess = true
+                    case .cancelled:
+                        // User cancelled, do nothing
+                        break
+                    case .pending:
+                        errorMessage = "Purchase is pending approval. Please check with your account holder."
+                        showError = true
+                    }
+                }
             } catch {
-                errorMessage = "Unable to start checkout. Please try again."
+                errorMessage = error.localizedDescription
                 showError = true
             }
         }
     }
 
-    private func handlePaymentSuccess() async {
-        guard let userId = userDefaults.userId else { return }
-
-        isRefreshingAfterPayment = true
-
-        // Sync subscription from Stripe with retry
-        for attempt in 1...5 {
-            // Wait before each attempt (webhook may need time to process)
-            try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_500_000_000)
-
-            // Try to sync from Stripe
-            do {
-                try await subscriptionManager.syncSubscription(userId: userId)
-            } catch {
-                print("Sync attempt \(attempt) failed: \(error)")
-                // Fallback: just fetch status
-                await subscriptionManager.fetchStatus(userId: userId, forceRefresh: true)
-            }
-
-            // If premium, we're done
-            if subscriptionManager.subscriptionStatus?.isPremium == true {
-                isRefreshingAfterPayment = false
-                return
-            }
-        }
-
-        isRefreshingAfterPayment = false
-
-        // If still not premium after retries, show message
-        if subscriptionManager.subscriptionStatus?.isPremium != true {
-            errorMessage = "Subscription is being processed. Please wait a moment and check again."
-            showError = true
-        }
-    }
-
-    private func openCustomerPortal() {
-        guard let userId = userDefaults.userId else {
-            errorMessage = "Unable to load subscription settings"
-            showError = true
-            return
-        }
-
-        Task {
-            do {
-                let url = try await subscriptionManager.getCustomerPortalURL(userId: userId)
-                safariURL = IdentifiableURL(url: url)
-            } catch {
-                errorMessage = "Unable to open subscription settings"
-                showError = true
+    private func openSubscriptionManagement() {
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            Task {
+                do {
+                    try await AppStore.showManageSubscriptions(in: windowScene)
+                } catch {
+                    errorMessage = "Unable to open subscription management"
+                    showError = true
+                }
             }
         }
     }
 
-    private func cancelSubscription() {
-        guard let userId = userDefaults.userId else { return }
-
-        Task {
-            do {
-                try await subscriptionManager.cancelSubscription(userId: userId)
-            } catch {
-                errorMessage = "Unable to cancel subscription. Please try again."
-                showError = true
-            }
-        }
+    private func refreshStatus() async {
+        await storeKit.loadProducts()
+        await storeKit.updateSubscriptionStatus()
     }
-}
-
-// MARK: - Identifiable URL Wrapper
-
-struct IdentifiableURL: Identifiable {
-    let id = UUID()
-    let url: URL
-}
-
-// MARK: - Safari View
-
-struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        SFSafariViewController(url: url)
-    }
-
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
 #Preview {

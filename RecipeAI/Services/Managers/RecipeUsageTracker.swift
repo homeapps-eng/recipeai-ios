@@ -122,6 +122,22 @@ final class RecipeUsageTracker: ObservableObject {
         }
     }
 
+    /// Reset recipe generation limits (after watching an ad)
+    func grantExtraRecipeGeneration() {
+        // Reset to allow full daily limit again
+        dailyRecipeCount = 0
+        dailyButtonPressCount = 0
+        defaults.set(dailyRecipeCount, forKey: Keys.dailyRecipeCount)
+        defaults.set(dailyButtonPressCount, forKey: Keys.dailyButtonPressCount)
+    }
+
+    /// Reset calorie calculation limits (after watching an ad)
+    func grantExtraCaloriesCalculation() {
+        // Reset to allow full daily limit again
+        dailyCaloriesCount = 0
+        defaults.set(dailyCaloriesCount, forKey: Keys.dailyCaloriesCount)
+    }
+
     // MARK: - Reset
 
     func resetDailyUsage() {
