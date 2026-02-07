@@ -50,9 +50,10 @@ struct LoadingView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 20) {
-                Image(systemName: "fork.knife.circle.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(.white)
+                Image("logo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 120, height: 120)
 
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))

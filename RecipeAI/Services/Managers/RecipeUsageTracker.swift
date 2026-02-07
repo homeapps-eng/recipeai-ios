@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+@MainActor
 final class RecipeUsageTracker: ObservableObject {
     static let shared = RecipeUsageTracker()
 
@@ -114,12 +115,10 @@ final class RecipeUsageTracker: ObservableObject {
         defaults.set(totalHomeRecipeLoads, forKey: Keys.totalHomeRecipeLoads)
     }
 
-    /// Grant one extra home recipe load (after watching an ad)
+    /// Grant extra home recipe loads (after watching an ad) - resets counter
     func grantExtraHomeRecipeLoad() {
-        if totalHomeRecipeLoads > 0 {
-            totalHomeRecipeLoads -= 1
-            defaults.set(totalHomeRecipeLoads, forKey: Keys.totalHomeRecipeLoads)
-        }
+        totalHomeRecipeLoads = 0
+        defaults.set(totalHomeRecipeLoads, forKey: Keys.totalHomeRecipeLoads)
     }
 
     /// Reset recipe generation limits (after watching an ad)

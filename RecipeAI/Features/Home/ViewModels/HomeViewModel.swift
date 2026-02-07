@@ -7,6 +7,8 @@ final class HomeViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var error: Error?
     @Published var showAdPrompt = false
+    @Published var showAdError = false
+    @Published var adErrorMessage = ""
 
     private let usageTracker = RecipeUsageTracker.shared
     private let adManager = AdManager.shared
@@ -19,6 +21,11 @@ final class HomeViewModel: ObservableObject {
 
         // Prevent duplicate loads (but allow if forcing refresh)
         guard !isLoading || forceRefresh else { return }
+
+        // Pre-load ad in background for when user needs it
+        Task {
+            await adManager.loadRewardedAd()
+        }
 
         // Check if user can load home recipe
         guard usageTracker.canLoadHomeRecipe else {
@@ -95,20 +102,24 @@ final class HomeViewModel: ObservableObject {
     func watchAdAndContinue() {
         // Dismiss the prompt immediately
         showAdPrompt = false
+        let shouldForceRefresh = pendingForceRefresh
 
         // Use retry logic to wait for alert to dismiss
         adManager.showRewardedAdWhenReady(
             onReward: { [weak self] in
                 guard let self = self else { return }
-                // Grant extra load after watching ad
-                self.usageTracker.grantExtraHomeRecipeLoad()
-                // Continue loading recipe
-                Task {
-                    await self.loadDailyRecipe(forceRefresh: self.pendingForceRefresh)
+                Task { @MainActor in
+                    // Grant extra load after watching ad (must be on main thread)
+                    self.usageTracker.grantExtraHomeRecipeLoad()
+                    // Continue loading recipe
+                    await self.loadDailyRecipe(forceRefresh: shouldForceRefresh)
                 }
             },
             onError: { [weak self] errorMessage in
-                self?.error = RecipeError.generationFailed(errorMessage)
+                Task { @MainActor in
+                    self?.adErrorMessage = errorMessage
+                    self?.showAdError = true
+                }
             }
         )
     }

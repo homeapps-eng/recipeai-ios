@@ -35,7 +35,6 @@ enum AppConfig {
         case .debug:
             return "ca-app-pub-3940256099942544~3347511713" // Test App ID
         case .release:
-            // TODO: Replace with production App ID
             return Bundle.main.object(forInfoDictionaryKey: "GADApplicationIdentifier") as? String ?? ""
         }
     }
@@ -49,15 +48,13 @@ enum AppConfig {
         }
     }
 
-    // MARK: - Stripe Configuration
+    // MARK: - Stripe Configuration (Legacy - using StoreKit for iOS)
 
     static var stripeMonthlyPriceId: String {
-        // TODO: Replace with actual price IDs
         return "price_monthly"
     }
 
     static var stripeAnnualPriceId: String {
-        // TODO: Replace with actual price IDs
         return "price_annual"
     }
 

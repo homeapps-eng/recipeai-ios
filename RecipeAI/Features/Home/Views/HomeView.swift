@@ -105,6 +105,17 @@ struct HomeView: View {
         } message: {
             Text("You've reached your daily limit. Watch a short ad to continue or upgrade to Premium for unlimited access.")
         }
+        .alert("Ad Unavailable", isPresented: $viewModel.showAdError) {
+            Button("Try Again") {
+                viewModel.watchAdAndContinue()
+            }
+            Button("Upgrade to Premium") {
+                showSubscription = true
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(viewModel.adErrorMessage)
+        }
         .sheet(isPresented: $showSubscription, onDismiss: {
             // If user subscribed, try loading recipe again
             if SubscriptionManager.shared.isPremium && viewModel.dailyRecipe == nil {
@@ -131,66 +142,85 @@ struct HomeView: View {
     // MARK: - Daily Recipe Card
 
     private func dailyRecipeCard(_ recipe: Recipe) -> some View {
-        NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
-            VStack(alignment: .leading, spacing: 12) {
-                // Recipe Image
-                if let imageUrl = recipe.imageUrl, let url = URL(string: imageUrl) {
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
+        VStack(spacing: 12) {
+            NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Recipe Image
+                    if let imageUrl = recipe.imageUrl, let url = URL(string: imageUrl) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Rectangle()
+                                .fill(Color.brandGreenLight)
+                                .overlay {
+                                    Image(systemName: "photo")
+                                        .font(.largeTitle)
+                                        .foregroundColor(.brandGreen)
+                                }
+                        }
+                        .frame(height: 200)
+                        .clipped()
+                        .cornerRadius(12)
+                    } else {
                         Rectangle()
                             .fill(Color.brandGreenLight)
+                            .frame(height: 200)
                             .overlay {
-                                Image(systemName: "photo")
-                                    .font(.largeTitle)
+                                Image(systemName: "fork.knife")
+                                    .font(.system(size: 50))
                                     .foregroundColor(.brandGreen)
                             }
+                            .cornerRadius(12)
                     }
-                    .frame(height: 200)
-                    .clipped()
-                    .cornerRadius(12)
-                } else {
-                    Rectangle()
-                        .fill(Color.brandGreenLight)
-                        .frame(height: 200)
-                        .overlay {
-                            Image(systemName: "fork.knife")
-                                .font(.system(size: 50))
-                                .foregroundColor(.brandGreen)
+
+                    // Recipe Info
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Today's Recipe")
+                            .font(.appCaption1)
+                            .foregroundColor(.brandGreen)
+                            .textCase(.uppercase)
+
+                        Text(recipe.name)
+                            .font(.appTitle3)
+                            .foregroundColor(.textPrimary)
+
+                        Text(recipe.shortDescription)
+                            .font(.appSubheadline)
+                            .foregroundColor(.textSecondary)
+                            .lineLimit(2)
+
+                        HStack(spacing: 16) {
+                            Label(recipe.cookingTime, systemImage: "clock")
+                            Label(recipe.servings + " servings", systemImage: "person.2")
+                            Label(recipe.difficulty, systemImage: "chart.bar")
                         }
-                        .cornerRadius(12)
-                }
-
-                // Recipe Info
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Today's Recipe")
                         .font(.appCaption1)
-                        .foregroundColor(.brandGreen)
-                        .textCase(.uppercase)
-
-                    Text(recipe.name)
-                        .font(.appTitle3)
-                        .foregroundColor(.textPrimary)
-
-                    Text(recipe.shortDescription)
-                        .font(.appSubheadline)
                         .foregroundColor(.textSecondary)
-                        .lineLimit(2)
-
-                    HStack(spacing: 16) {
-                        Label(recipe.cookingTime, systemImage: "clock")
-                        Label(recipe.servings + " servings", systemImage: "person.2")
-                        Label(recipe.difficulty, systemImage: "chart.bar")
                     }
-                    .font(.appCaption1)
-                    .foregroundColor(.textSecondary)
                 }
+                .cardStyle()
             }
-            .cardStyle()
+            .buttonStyle(.plain)
+
+            // Refresh hint
+            Button {
+                Task {
+                    await viewModel.refreshRecipe()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12, weight: .medium))
+                    Text("Get new recipe")
+                        .font(.appCaption1)
+                }
+                .foregroundColor(.textSecondary)
+            }
+            .disabled(viewModel.isLoading)
+            .opacity(viewModel.isLoading ? 0.5 : 1)
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Loading Section

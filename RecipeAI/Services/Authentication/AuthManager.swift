@@ -615,13 +615,16 @@ final class AuthManager: ObservableObject {
     private func refreshAndSaveToken(user: User) async throws {
         try await refreshToken(user: user)
 
-        // Save user info
+        // Save user info, but preserve existing username/avatar if already saved
         let defaults = UserDefaultsManager.shared
+        let existingUsername = defaults.username
+        let existingAvatarUrl = defaults.avatarUrl
+
         defaults.saveUserInfo(
             userId: user.uid,
-            username: user.displayName ?? "User",
+            username: existingUsername ?? user.displayName ?? "User",
             email: user.email ?? "",
-            avatarUrl: user.photoURL?.absoluteString
+            avatarUrl: existingAvatarUrl ?? user.photoURL?.absoluteString
         )
     }
 

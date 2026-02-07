@@ -15,6 +15,7 @@ final class AdManager: NSObject, ObservableObject {
     private var rewardCallback: (() -> Void)?
     private var errorCallback: ((String) -> Void)?
     private var isShowingAd = false
+    private var rewardEarned = false
 
     private override init() {
         super.init()
@@ -88,8 +89,10 @@ final class AdManager: NSObject, ObservableObject {
 
     private func presentAd(_ ad: RewardedAd, from viewController: UIViewController) {
         isShowingAd = true
+        rewardEarned = false
 
         ad.present(from: viewController) { [weak self] in
+            self?.rewardEarned = true
             self?.rewardCallback?()
             self?.rewardCallback = nil
             self?.errorCallback = nil
@@ -156,6 +159,16 @@ extension AdManager: FullScreenContentDelegate {
             self.isShowingAd = false
             self.rewardedAd = nil
             self.isRewardedAdReady = false
+
+            // If ad was dismissed without earning reward, notify user
+            if !self.rewardEarned {
+                self.errorCallback?("Please watch the complete ad to continue.")
+            }
+
+            self.rewardCallback = nil
+            self.errorCallback = nil
+            self.rewardEarned = false
+
             await self.loadRewardedAd()
         }
     }

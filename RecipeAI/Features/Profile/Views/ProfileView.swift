@@ -25,10 +25,8 @@ struct ProfileView: View {
                 // Menu Items
                 menuSection
 
-                // Subscription Section (hide for guests)
-                if !authManager.isGuest {
-                    subscriptionSection
-                }
+                // Subscription Section
+                subscriptionSection
 
                 // Settings & Support
                 settingsSection
@@ -45,9 +43,16 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showGuestConversion) {
                 GuestConversionView()
+                    .environmentObject(authManager)
             }
             .onChange(of: authManager.authState) { _, newState in
                 // Force refresh when auth state changes
+                refreshID = UUID()
+            }
+            .onChange(of: userDefaults.username) { _, _ in
+                refreshID = UUID()
+            }
+            .onChange(of: userDefaults.avatarUrl) { _, _ in
                 refreshID = UUID()
             }
             .id(refreshID)
@@ -125,7 +130,7 @@ struct ProfileView: View {
 
     private var profileHeader: some View {
         Section {
-            NavigationLink(destination: EditProfileView()) {
+            NavigationLink(destination: EditProfileView().environmentObject(userDefaults)) {
                 HStack(spacing: 16) {
                     // Avatar
                     if let avatarUrl = userDefaults.avatarUrl,
@@ -137,6 +142,7 @@ struct ProfileView: View {
                         } placeholder: {
                             avatarPlaceholder
                         }
+                        .id(avatarUrl + refreshID.uuidString)
                         .frame(width: 70, height: 70)
                         .clipShape(Circle())
                     } else {
@@ -248,12 +254,12 @@ struct ProfileView: View {
 
     private var settingsSection: some View {
         Section("Settings") {
-            NavigationLink(destination: SettingsView()) {
+            NavigationLink(destination: SettingsView().environmentObject(authManager)) {
                 Label("Settings", systemImage: "gear")
                     .foregroundColor(.textPrimary)
             }
 
-            NavigationLink(destination: SupportView()) {
+            NavigationLink(destination: SupportView().environmentObject(authManager)) {
                 Label("Help & Support", systemImage: "questionmark.circle")
                     .foregroundColor(.textPrimary)
             }
