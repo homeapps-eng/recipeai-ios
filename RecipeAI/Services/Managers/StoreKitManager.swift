@@ -130,13 +130,6 @@ final class StoreKitManager: ObservableObject {
         var purchased: [Product] = []
         var latestExpirationDate: Date?
 
-        // Force sync with App Store to get latest subscription status
-        do {
-            try await AppStore.sync()
-        } catch {
-            // Sync failed, continue with local data
-        }
-
         for await result in Transaction.currentEntitlements {
             do {
                 let transaction = try checkVerified(result)

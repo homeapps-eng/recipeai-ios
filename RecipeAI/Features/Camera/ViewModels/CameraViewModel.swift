@@ -86,8 +86,9 @@ final class CameraViewModel: NSObject, ObservableObject {
         capturedImagePath = nil
 
         // Restart capture session
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.captureSession.startRunning()
+        let session = captureSession
+        DispatchQueue.global(qos: .userInitiated).async {
+            session.startRunning()
         }
     }
 

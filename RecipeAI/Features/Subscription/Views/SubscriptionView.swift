@@ -26,6 +26,7 @@ struct SubscriptionView: View {
                     plansSection
                     subscribeButton
                     restoreButton
+                    legalLinksSection
                 }
             }
             .padding()
@@ -259,6 +260,8 @@ struct SubscriptionView: View {
     private func planCard(_ product: Product) -> some View {
         let isSelected = selectedProduct?.id == product.id
         let isAnnual = product.id.contains("annual")
+        let periodLabel = isAnnual ? "per year" : "per month"
+        let durationLabel = isAnnual ? "12 months" : "1 month"
 
         return Button {
             selectedProduct = product
@@ -281,7 +284,7 @@ struct SubscriptionView: View {
                         }
                     }
 
-                    Text(product.description)
+                    Text("\(product.displayPrice)/\(periodLabel) · \(durationLabel)")
                         .font(.appCaption1)
                         .foregroundColor(.textSecondary)
                 }
@@ -331,6 +334,31 @@ struct SubscriptionView: View {
                 .font(.appSubheadline)
                 .foregroundColor(.brandGreen)
         }
+    }
+
+    // MARK: - Legal Links Section
+
+    private var legalLinksSection: some View {
+        VStack(spacing: 8) {
+            Text("Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period. You can manage or cancel anytime in Settings > Subscriptions.")
+                .font(.appCaption1)
+                .foregroundColor(.textSecondary)
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 16) {
+                Link("Terms of Use", destination: AppConfig.termsURL)
+                    .font(.appCaption1)
+                    .foregroundColor(.brandGreen)
+
+                Text("·")
+                    .foregroundColor(.textSecondary)
+
+                Link("Privacy Policy", destination: AppConfig.privacyURL)
+                    .font(.appCaption1)
+                    .foregroundColor(.brandGreen)
+            }
+        }
+        .padding(.top, 8)
     }
 
     // MARK: - Manage Section
