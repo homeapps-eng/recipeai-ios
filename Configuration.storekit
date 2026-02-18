@@ -1,0 +1,107 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "FAD035BE",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6756966314",
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingIssuesEnabled" : false,
+    "_developerTeamID" : "777Y8L34DP",
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 793103758.81509697,
+    "_locale" : "en_US",
+    "_renewalBillingIssuesEnabled" : false,
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ],
+    "_timeRate" : 0
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21893962",
+      "localizations" : [
+
+      ],
+      "name" : "RecipeAI Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "29.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "6757906563",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlimited recipes. Billed annually - discounted price",
+              "displayName" : "RecipeAI Premium – Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.homeapps.recipeai.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "recipeai_premium_annual",
+          "subscriptionGroupID" : "21893962",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "2.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6757906341",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlimited AI-generated recipes ads free. Billed monthly",
+              "displayName" : "RecipeAI Premium – Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.homeapps.recipeai.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "recipeai_premium_monthly",
+          "subscriptionGroupID" : "21893962",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

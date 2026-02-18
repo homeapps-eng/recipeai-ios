@@ -13,7 +13,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Configure Firebase
         FirebaseApp.configure()
 
-        // Configure AdMob
+        // Configure AdMob (ATT is requested contextually before first ad)
         AdManager.shared.configure()
 
         // Request notification permissions

@@ -48,6 +48,10 @@ struct RecipeAIApp: App {
 
         // Clear usage tracker
         RecipeUsageTracker.shared.resetAll()
+
+        // Clear subscription cache
+        StoreKitManager.shared.resetOnSignOut()
+        SubscriptionManager.shared.clear()
     }
 
     private func handleDeepLink(_ url: URL) {
