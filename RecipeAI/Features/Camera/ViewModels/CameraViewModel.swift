@@ -1,19 +1,30 @@
 import Foundation
 import AVFoundation
 import UIKit
+import Combine
+
+enum PendingCameraAction {
+    case generateRecipes
+    case calculateCalories
+}
 
 @MainActor
 final class CameraViewModel: NSObject, ObservableObject {
     @Published var capturedImage: UIImage?
     @Published var isCameraAuthorized = false
     @Published var isLoading = false
+    @Published var loadingMode: AILoadingMode = .analyzingImage
     @Published var showError = false
     @Published var errorMessage = ""
     @Published var showActionSheet = false
+    @Published var showAdPrompt = false
 
     let captureSession = AVCaptureSession()
     private var photoOutput = AVCapturePhotoOutput()
     private var capturedImagePath: String?
+    private let adManager = AdManager.shared
+    private let usageTracker = RecipeUsageTracker.shared
+    private var pendingAction: PendingCameraAction?
 
     override init() {
         super.init()
@@ -59,7 +70,7 @@ final class CameraViewModel: NSObject, ObservableObject {
 
             captureSession.sessionPreset = .photo
         } catch {
-            print("Error setting up camera: \(error)")
+            // Camera setup failed
         }
     }
 
@@ -75,8 +86,9 @@ final class CameraViewModel: NSObject, ObservableObject {
         capturedImagePath = nil
 
         // Restart capture session
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.captureSession.startRunning()
+        let session = captureSession
+        DispatchQueue.global(qos: .userInitiated).async {
+            session.startRunning()
         }
     }
 
@@ -86,12 +98,13 @@ final class CameraViewModel: NSObject, ObservableObject {
         guard let image = capturedImage else { return [] }
 
         // Check usage limits
-        guard RecipeUsageTracker.shared.canGenerateRecipe else {
-            errorMessage = "Daily limit reached. Watch an ad to get more recipes!"
-            showError = true
+        guard usageTracker.canGenerateRecipe else {
+            pendingAction = .generateRecipes
+            showAdPrompt = true
             return []
         }
 
+        loadingMode = .generatingRecipes
         isLoading = true
 
         do {
@@ -115,8 +128,8 @@ final class CameraViewModel: NSObject, ObservableObject {
                 }
 
                 // Increment usage
-                RecipeUsageTracker.shared.incrementRecipeCount(by: recipeList.count)
-                RecipeUsageTracker.shared.incrementButtonPressCount()
+                usageTracker.incrementRecipeCount(by: recipeList.count)
+                usageTracker.incrementButtonPressCount()
 
                 isLoading = false
                 return recipeList
@@ -125,7 +138,7 @@ final class CameraViewModel: NSObject, ObservableObject {
             }
         } catch {
             isLoading = false
-            errorMessage = error.localizedDescription
+            errorMessage = "Unable to generate recipes. Please try again with a clearer photo."
             showError = true
             return []
         }
@@ -136,6 +149,14 @@ final class CameraViewModel: NSObject, ObservableObject {
     func calculateCalories() async -> CaloriesResponse? {
         guard let image = capturedImage else { return nil }
 
+        // Check usage limits
+        guard usageTracker.canCalculateCalories else {
+            pendingAction = .calculateCalories
+            showAdPrompt = true
+            return nil
+        }
+
+        loadingMode = .calculatingCalories
         isLoading = true
 
         do {
@@ -152,6 +173,9 @@ final class CameraViewModel: NSObject, ObservableObject {
             )
 
             if response.success {
+                // Increment usage
+                usageTracker.incrementCaloriesCount()
+
                 isLoading = false
                 return response
             } else {
@@ -159,20 +183,69 @@ final class CameraViewModel: NSObject, ObservableObject {
             }
         } catch {
             isLoading = false
-            errorMessage = error.localizedDescription
+            errorMessage = "Unable to calculate calories. Please try again with a clearer photo."
             showError = true
             return nil
         }
     }
 
+    // MARK: - Ad Handling
+
+    func watchAdAndContinue(onRecipesGenerated: @escaping ([Recipe]) -> Void, onCaloriesCalculated: @escaping (CaloriesResponse) -> Void) {
+        showAdPrompt = false
+
+        // Use retry logic to wait for alert to dismiss
+        adManager.showRewardedAdWhenReady(
+            onReward: { [weak self] in
+                guard let self = self else { return }
+
+                // Grant extra usage based on pending action
+                switch self.pendingAction {
+                case .generateRecipes:
+                    self.usageTracker.grantExtraRecipeGeneration()
+                    Task {
+                        let recipes = await self.generateRecipes()
+                        if !recipes.isEmpty {
+                            onRecipesGenerated(recipes)
+                        }
+                    }
+                case .calculateCalories:
+                    self.usageTracker.grantExtraCaloriesCalculation()
+                    Task {
+                        if let response = await self.calculateCalories() {
+                            onCaloriesCalculated(response)
+                        }
+                    }
+                case .none:
+                    break
+                }
+
+                self.pendingAction = nil
+            },
+            onError: { [weak self] errorMessage in
+                self?.errorMessage = errorMessage
+                self?.showError = true
+                self?.pendingAction = nil
+            }
+        )
+    }
+
+    func dismissAdPrompt() {
+        showAdPrompt = false
+        pendingAction = nil
+    }
+
     // MARK: - Image Processing
 
-    private func imageToBase64(_ image: UIImage, quality: CGFloat = 0.8) -> String? {
+    private func imageToBase64(_ image: UIImage) -> String? {
         // Fix orientation
         let fixedImage = image.fixedOrientation()
 
-        // Compress image
-        guard let imageData = fixedImage.jpegData(compressionQuality: quality) else {
+        // Resize image to max 512px for Gemini API
+        let resizedImage = fixedImage.resizedForAPI(maxDimension: 512)
+
+        // Compress with lower quality to reduce size
+        guard let imageData = resizedImage.jpegData(compressionQuality: 0.6) else {
             return nil
         }
 
@@ -192,7 +265,6 @@ final class CameraViewModel: NSObject, ObservableObject {
             try data.write(to: filePath)
             return filePath.path
         } catch {
-            print("Error saving image: \(error)")
             return nil
         }
     }
@@ -206,8 +278,7 @@ extension CameraViewModel: AVCapturePhotoCaptureDelegate {
         didFinishProcessingPhoto photo: AVCapturePhoto,
         error: Error?
     ) {
-        if let error = error {
-            print("Error capturing photo: \(error)")
+        if error != nil {
             return
         }
 
@@ -243,5 +314,18 @@ extension UIImage {
         UIGraphicsEndImageContext()
 
         return normalizedImage ?? self
+    }
+
+    func resizedForAPI(maxDimension: CGFloat) -> UIImage {
+        let currentMax = max(size.width, size.height)
+        guard currentMax > maxDimension else { return self }
+
+        let scale = maxDimension / currentMax
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: newSize))
+        }
     }
 }

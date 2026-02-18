@@ -12,6 +12,8 @@ struct SubscriptionStatus: Codable {
     let cancelAtPeriodEnd: Bool?
     let planName: String?
     let error: String?
+    let isAppleSubscription: Bool?
+    let autoRenewStatus: Bool?
 
     var isPremium: Bool {
         isActive
@@ -19,6 +21,10 @@ struct SubscriptionStatus: Codable {
 
     var periodEndDate: Date? {
         guard let timestamp = currentPeriodEnd else { return nil }
+        // Backend sends milliseconds for Apple subscriptions
+        if isAppleSubscription == true {
+            return Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
+        }
         return Date(timeIntervalSince1970: TimeInterval(timestamp))
     }
 
@@ -26,10 +32,20 @@ struct SubscriptionStatus: Codable {
         if !isActive {
             return .inactive
         }
-        if cancelAtPeriodEnd == true {
+        // Check if user has cancelled (auto-renew off or cancelAtPeriodEnd)
+        if cancelAtPeriodEnd == true || autoRenewStatus == false {
             return .expiring
         }
         return .active
+    }
+
+    var willRenew: Bool {
+        // For Apple: check autoRenewStatus
+        // For Stripe: check cancelAtPeriodEnd
+        if isAppleSubscription == true {
+            return autoRenewStatus ?? true
+        }
+        return !(cancelAtPeriodEnd ?? false)
     }
 }
 
@@ -53,60 +69,4 @@ enum SubscriptionStatusType {
         case .inactive: return "F44336"
         }
     }
-}
-
-// MARK: - Pricing Plan
-
-struct PricingPlan: Codable, Identifiable {
-    let priceId: String
-    let name: String
-    let interval: String
-    let currency: String
-    let amount: Int64
-    let displayPrice: String
-
-    var id: String { priceId }
-
-    var isMonthly: Bool {
-        interval.lowercased() == "month"
-    }
-
-    var isAnnual: Bool {
-        interval.lowercased() == "year"
-    }
-}
-
-// MARK: - Pricing Plans Response
-
-struct PricingPlansResponse: Codable {
-    let plans: [PricingPlan]
-}
-
-// MARK: - Create Checkout Request
-
-struct CreateCheckoutRequest: Codable {
-    let userId: String
-    let priceId: String
-    let successUrl: String
-    let cancelUrl: String
-}
-
-// MARK: - Checkout Session Response
-
-struct CheckoutSessionResponse: Codable {
-    let sessionId: String
-    let url: String
-}
-
-// MARK: - Customer Portal Response
-
-struct CustomerPortalResponse: Codable {
-    let url: String
-}
-
-// MARK: - Cancel Subscription Response
-
-struct CancelSubscriptionResponse: Codable {
-    let success: Bool
-    let message: String?
 }

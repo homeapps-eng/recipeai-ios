@@ -56,3 +56,9 @@ struct UpdateSettingsRequest: Codable {
     let recipeSuggestions: Bool
     let measurementUnits: String
 }
+
+// MARK: - Delete User Response
+
+struct DeleteUserResponse: Codable {
+    let message: String?
+}

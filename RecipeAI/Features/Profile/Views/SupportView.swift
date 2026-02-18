@@ -1,15 +1,26 @@
 import SwiftUI
 
 struct SupportView: View {
+    @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var userDefaults: UserDefaultsManager
+    @State private var email = ""
     @State private var message = ""
     @State private var isLoading = false
     @State private var showSuccess = false
     @State private var showError = false
     @State private var errorMessage = ""
 
+    private var isValidEmail: Bool {
+        let emailRegex = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
+        return email.range(of: emailRegex, options: .regularExpression) != nil
+    }
+
     var isValid: Bool {
-        message.trimmingCharacters(in: .whitespacesAndNewlines).count >= 10
+        let hasValidMessage = message.trimmingCharacters(in: .whitespacesAndNewlines).count >= 10
+        if authManager.isGuest {
+            return hasValidMessage && isValidEmail
+        }
+        return hasValidMessage
     }
 
     var body: some View {
@@ -33,6 +44,7 @@ struct SupportView: View {
         .navigationBarTitleDisplayMode(.inline)
         .alert("Message Sent", isPresented: $showSuccess) {
             Button("OK") {
+                email = ""
                 message = ""
             }
         } message: {
@@ -73,13 +85,31 @@ struct SupportView: View {
                 .font(.appSubheadline)
                 .foregroundColor(.textSecondary)
 
-            Text(userDefaults.userEmail ?? "")
-                .font(.appBody)
-                .foregroundColor(.textPrimary)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.backgroundSecondary)
-                .cornerRadius(12)
+            if authManager.isGuest {
+                TextField("Enter your email address", text: $email)
+                    .font(.appBody)
+                    .textContentType(.emailAddress)
+                    .keyboardType(.emailAddress)
+                    .autocapitalization(.none)
+                    .autocorrectionDisabled()
+                    .padding()
+                    .background(Color.backgroundSecondary)
+                    .cornerRadius(12)
+
+                if !email.isEmpty && !isValidEmail {
+                    Text("Please enter a valid email address")
+                        .font(.appCaption1)
+                        .foregroundColor(.red)
+                }
+            } else {
+                Text(userDefaults.userEmail ?? "")
+                    .font(.appBody)
+                    .foregroundColor(.textPrimary)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.backgroundSecondary)
+                    .cornerRadius(12)
+            }
 
             Text("Message")
                 .font(.appSubheadline)
@@ -166,23 +196,33 @@ struct SupportView: View {
     // MARK: - Actions
 
     private func sendMessage() {
-        guard let email = userDefaults.userEmail else { return }
+        let emailToUse: String
+        if authManager.isGuest {
+            emailToUse = email
+        } else {
+            guard let userEmail = userDefaults.userEmail else { return }
+            emailToUse = userEmail
+        }
 
         isLoading = true
 
         Task {
             do {
-                let request = SupportRequest(email: email, message: message)
+                let request = SupportRequest(email: emailToUse, message: message)
                 let _: SupportResponse = try await NetworkManager.shared.post(
                     endpoint: .submitSupport,
                     body: request
                 )
-                isLoading = false
-                showSuccess = true
+                await MainActor.run {
+                    isLoading = false
+                    showSuccess = true
+                }
             } catch {
-                isLoading = false
-                errorMessage = error.localizedDescription
-                showError = true
+                await MainActor.run {
+                    isLoading = false
+                    errorMessage = error.localizedDescription
+                    showError = true
+                }
             }
         }
     }
@@ -191,6 +231,7 @@ struct SupportView: View {
 #Preview {
     NavigationStack {
         SupportView()
+            .environmentObject(AuthManager.shared)
             .environmentObject(UserDefaultsManager.shared)
     }
 }

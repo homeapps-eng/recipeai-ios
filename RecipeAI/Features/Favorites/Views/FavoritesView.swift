@@ -3,10 +3,15 @@ import SwiftData
 
 struct FavoritesView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var authManager: AuthManager
+    @Query(sort: \FavoriteRecipe.dateSaved, order: .reverse) private var favoriteRecipes: [FavoriteRecipe]
     @State private var viewMode: ViewMode = .list
     @State private var selectedDate = Date()
-    @State private var favorites: [Recipe] = []
-    @State private var datesWithFavorites: Set<Date> = []
+    @State private var showGuestConversion = false
+
+    private var favorites: [Recipe] {
+        favoriteRecipes.map { $0.toRecipe() }
+    }
 
     private var favoritesRepo: FavoritesRepository {
         FavoritesRepository(modelContext: modelContext)
@@ -19,6 +24,11 @@ struct FavoritesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Guest Banner
+            if authManager.isGuest {
+                guestBanner
+            }
+
             // View Mode Picker
             Picker("View Mode", selection: $viewMode) {
                 Image(systemName: "list.bullet")
@@ -38,9 +48,44 @@ struct FavoritesView: View {
         }
         .navigationTitle("Favorites")
         .navigationBarTitleDisplayMode(.large)
-        .onAppear {
-            loadFavorites()
+        .sheet(isPresented: $showGuestConversion) {
+            GuestConversionView()
         }
+    }
+
+    // MARK: - Guest Banner
+
+    private var guestBanner: some View {
+        Button {
+            showGuestConversion = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "icloud.slash")
+                    .font(.title3)
+                    .foregroundColor(.orange)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Favorites stored locally")
+                        .font(.appSubheadline)
+                        .foregroundColor(.textPrimary)
+                    Text("Sign up to sync across devices")
+                        .font(.appCaption1)
+                        .foregroundColor(.textSecondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.textSecondary)
+            }
+            .padding()
+            .background(Color.orange.opacity(0.1))
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal)
+        .padding(.top, 8)
     }
 
     // MARK: - List View
@@ -78,9 +123,6 @@ struct FavoritesView: View {
             .datePickerStyle(.graphical)
             .tint(.brandGreen)
             .padding(.horizontal)
-            .onChange(of: selectedDate) { _, newDate in
-                loadFavoritesForDate(newDate)
-            }
 
             // Favorites for selected date
             let dateFavorites = favoritesRepo.fetchFavoritesByDate(selectedDate)
@@ -177,17 +219,6 @@ struct FavoritesView: View {
         .cornerRadius(12)
     }
 
-    // MARK: - Data Loading
-
-    private func loadFavorites() {
-        favoritesRepo.fetchAllFavorites()
-        favorites = favoritesRepo.favorites
-        datesWithFavorites = favoritesRepo.getDatesWithFavorites()
-    }
-
-    private func loadFavoritesForDate(_ date: Date) {
-        // This triggers UI update via state
-    }
 }
 
 #Preview {

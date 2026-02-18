@@ -70,19 +70,22 @@ struct SettingsView: View {
 
     // MARK: - Account Section
 
+    @ViewBuilder
     private var accountSection: some View {
-        Section("Account") {
-            Button {
-                showChangePassword = true
-            } label: {
-                Label("Change Password", systemImage: "key")
-                    .foregroundColor(.textPrimary)
-            }
+        if !authManager.isGuest {
+            Section("Account") {
+                Button {
+                    showChangePassword = true
+                } label: {
+                    Label("Change Password", systemImage: "key")
+                        .foregroundColor(.textPrimary)
+                }
 
-            Button(role: .destructive) {
-                showDeleteConfirmation = true
-            } label: {
-                Label("Delete Account", systemImage: "trash")
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    Label("Delete Account", systemImage: "trash")
+                }
             }
         }
     }

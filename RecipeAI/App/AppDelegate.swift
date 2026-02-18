@@ -13,6 +13,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Configure Firebase
         FirebaseApp.configure()
 
+        // Configure AdMob
+        AdManager.shared.configure()
+
         // Request notification permissions
         UNUserNotificationCenter.current().delegate = self
         requestNotificationPermissions(application)
@@ -23,12 +26,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     private func requestNotificationPermissions(_ application: UIApplication) {
         UNUserNotificationCenter.current().requestAuthorization(
             options: [.alert, .badge, .sound]
-        ) { granted, error in
-            if let error = error {
-                print("Notification permission error: \(error.localizedDescription)")
-                return
-            }
-
+        ) { granted, _ in
             if granted {
                 DispatchQueue.main.async {
                     application.registerForRemoteNotifications()
@@ -49,7 +47,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        print("Failed to register for remote notifications: \(error.localizedDescription)")
+        // Failed to register for remote notifications
     }
 
     // Handle Google Sign-In URL

@@ -88,9 +88,14 @@ struct GeneratedRecipe: Codable {
 // MARK: - Single Recipe Response (for daily recipe)
 
 struct SingleRecipeResponse: Codable {
-    let recipe: Recipe?
+    let recipes: [GeneratedRecipe]?
     let success: Bool
     let message: String?
+
+    // Convenience property to get first recipe
+    var recipe: Recipe? {
+        recipes?.first?.recipe
+    }
 }
 
 // MARK: - Recipe Difficulty

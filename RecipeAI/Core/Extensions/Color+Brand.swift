@@ -3,9 +3,6 @@ import SwiftUI
 extension Color {
     // MARK: - Brand Colors
 
-    /// Primary brand green - #00A86B
-    static let brandGreen = Color(hex: "00A86B")
-
     /// Light brand green - #E2EFDD
     static let brandGreenLight = Color(hex: "E2EFDD")
 

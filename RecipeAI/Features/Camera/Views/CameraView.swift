@@ -4,6 +4,7 @@ import AVFoundation
 struct CameraView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = CameraViewModel()
+    @State private var showSubscription = false
 
     var onRecipesGenerated: ([Recipe]) -> Void
     var onCaloriesCalculated: (CaloriesResponse) -> Void
@@ -51,7 +52,46 @@ struct CameraView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             }
-            .loadingOverlay(isLoading: viewModel.isLoading)
+            .alert("Daily Limit Reached", isPresented: $viewModel.showAdPrompt) {
+                Button("Watch Ad") {
+                    viewModel.watchAdAndContinue(
+                        onRecipesGenerated: { recipes in
+                            onRecipesGenerated(recipes)
+                        },
+                        onCaloriesCalculated: { response in
+                            onCaloriesCalculated(response)
+                        }
+                    )
+                }
+                Button("Upgrade to Premium") {
+                    viewModel.showAdPrompt = false
+                    showSubscription = true
+                }
+                Button("Cancel", role: .cancel) {
+                    viewModel.dismissAdPrompt()
+                }
+            } message: {
+                Text("Watch a short ad to continue or upgrade to Premium for unlimited access.")
+            }
+            .sheet(isPresented: $showSubscription) {
+                NavigationStack {
+                    SubscriptionView()
+                        .environmentObject(UserDefaultsManager.shared)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarLeading) {
+                                Button("Close") {
+                                    showSubscription = false
+                                }
+                            }
+                        }
+                }
+            }
+            .aiLoadingOverlay(
+                isLoading: viewModel.isLoading,
+                mode: viewModel.loadingMode,
+                image: viewModel.capturedImage
+            )
             .onAppear {
                 viewModel.checkCameraPermission()
             }
@@ -182,23 +222,54 @@ struct CameraPreviewView: UIViewRepresentable {
     let session: AVCaptureSession
 
     func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-
-        let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-        previewLayer.videoGravity = .resizeAspectFill
-        view.layer.addSublayer(previewLayer)
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            session.startRunning()
-        }
-
+        let view = CameraPreviewUIView()
+        view.session = session
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        if let previewLayer = uiView.layer.sublayers?.first as? AVCaptureVideoPreviewLayer {
-            previewLayer.frame = uiView.bounds
+        if let cameraView = uiView as? CameraPreviewUIView {
+            cameraView.updatePreviewFrame()
         }
+    }
+}
+
+private class CameraPreviewUIView: UIView {
+    var session: AVCaptureSession?
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var hasStartedSession = false
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        // Only start session once we have valid bounds
+        if bounds.width > 0 && bounds.height > 0 {
+            setupPreviewLayerIfNeeded()
+            previewLayer?.frame = bounds
+            startSessionIfNeeded()
+        }
+    }
+
+    private func setupPreviewLayerIfNeeded() {
+        guard previewLayer == nil, let session = session else { return }
+
+        let layer = AVCaptureVideoPreviewLayer(session: session)
+        layer.videoGravity = .resizeAspectFill
+        self.layer.addSublayer(layer)
+        previewLayer = layer
+    }
+
+    private func startSessionIfNeeded() {
+        guard !hasStartedSession, let session = session, !session.isRunning else { return }
+        hasStartedSession = true
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            session.startRunning()
+        }
+    }
+
+    func updatePreviewFrame() {
+        previewLayer?.frame = bounds
     }
 }
 

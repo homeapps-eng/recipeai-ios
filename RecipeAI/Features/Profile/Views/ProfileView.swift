@@ -1,15 +1,26 @@
 import SwiftUI
 
 struct ProfileView: View {
-    @EnvironmentObject var authManager: AuthManager
+    @ObservedObject var authManager = AuthManager.shared
     @EnvironmentObject var userDefaults: UserDefaultsManager
     @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @State private var showGuestConversion = false
+    @State private var refreshID = UUID()
 
     var body: some View {
         NavigationStack {
             List {
                 // Profile Header
-                profileHeader
+                if authManager.isGuest {
+                    guestProfileHeader
+                } else {
+                    profileHeader
+                }
+
+                // Create Account Card for Guests
+                if authManager.isGuest {
+                    createAccountSection
+                }
 
                 // Menu Items
                 menuSection
@@ -26,10 +37,92 @@ struct ProfileView: View {
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.large)
             .task {
-                if let userId = userDefaults.userId {
+                if let userId = userDefaults.userId, !authManager.isGuest {
                     await subscriptionManager.fetchStatus(userId: userId)
                 }
             }
+            .sheet(isPresented: $showGuestConversion) {
+                GuestConversionView()
+                    .environmentObject(authManager)
+            }
+            .onChange(of: authManager.authState) { _, newState in
+                // Force refresh when auth state changes
+                refreshID = UUID()
+            }
+            .onChange(of: userDefaults.username) { _, _ in
+                refreshID = UUID()
+            }
+            .onChange(of: userDefaults.avatarUrl) { _, _ in
+                refreshID = UUID()
+            }
+            .id(refreshID)
+        }
+    }
+
+    // MARK: - Guest Profile Header
+
+    private var guestProfileHeader: some View {
+        Section {
+            HStack(spacing: 16) {
+                // Guest Avatar
+                Circle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 70, height: 70)
+                    .overlay {
+                        Image(systemName: "person.fill")
+                            .font(.title)
+                            .foregroundColor(.gray)
+                    }
+
+                // Guest Info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Guest User")
+                        .font(.appTitle3)
+                        .foregroundColor(.textPrimary)
+
+                    Text("Not signed in")
+                        .font(.appSubheadline)
+                        .foregroundColor(.textSecondary)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+    }
+
+    // MARK: - Create Account Section
+
+    private var createAccountSection: some View {
+        Section {
+            Button {
+                showGuestConversion = true
+            } label: {
+                HStack(spacing: 16) {
+                    Image(systemName: "person.badge.plus")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.brandGreen)
+                        .cornerRadius(10)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Create Free Account")
+                            .font(.appHeadline)
+                            .foregroundColor(.textPrimary)
+
+                        Text("Sync your data across devices")
+                            .font(.appCaption1)
+                            .foregroundColor(.textSecondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.textSecondary)
+                }
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -37,47 +130,48 @@ struct ProfileView: View {
 
     private var profileHeader: some View {
         Section {
-            HStack(spacing: 16) {
-                // Avatar
-                if let avatarUrl = userDefaults.avatarUrl,
-                   let url = URL(string: avatarUrl) {
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
+            NavigationLink(destination: EditProfileView().environmentObject(userDefaults)) {
+                HStack(spacing: 16) {
+                    // Avatar
+                    if let avatarUrl = userDefaults.avatarUrl,
+                       let url = URL(string: avatarUrl) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            avatarPlaceholder
+                        }
+                        .id(avatarUrl + refreshID.uuidString)
+                        .frame(width: 70, height: 70)
+                        .clipShape(Circle())
+                    } else {
                         avatarPlaceholder
                     }
-                    .frame(width: 70, height: 70)
-                    .clipShape(Circle())
-                } else {
-                    avatarPlaceholder
-                }
 
-                // User Info
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(userDefaults.username ?? "User")
-                        .font(.appTitle3)
-                        .foregroundColor(.textPrimary)
+                    // User Info
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(userDefaults.username ?? "User")
+                            .font(.appTitle3)
+                            .foregroundColor(.textPrimary)
 
-                    Text(userDefaults.userEmail ?? "")
-                        .font(.appSubheadline)
-                        .foregroundColor(.textSecondary)
+                        Text(userDefaults.userEmail ?? "")
+                            .font(.appSubheadline)
+                            .foregroundColor(.textSecondary)
 
-                    if subscriptionManager.isPremium {
-                        Text("Premium Member")
-                            .font(.appCaption1)
-                            .foregroundColor(.brandGreen)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(Color.brandGreenLight)
-                            .cornerRadius(4)
+                        if subscriptionManager.isPremium {
+                            Text("Premium Member")
+                                .font(.appCaption1)
+                                .foregroundColor(.brandGreen)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 2)
+                                .background(Color.brandGreenLight)
+                                .cornerRadius(4)
+                        }
                     }
                 }
-
-                Spacer()
+                .padding(.vertical, 8)
             }
-            .padding(.vertical, 8)
         }
     }
 
@@ -160,12 +254,12 @@ struct ProfileView: View {
 
     private var settingsSection: some View {
         Section("Settings") {
-            NavigationLink(destination: SettingsView()) {
+            NavigationLink(destination: SettingsView().environmentObject(authManager)) {
                 Label("Settings", systemImage: "gear")
                     .foregroundColor(.textPrimary)
             }
 
-            NavigationLink(destination: SupportView()) {
+            NavigationLink(destination: SupportView().environmentObject(authManager)) {
                 Label("Help & Support", systemImage: "questionmark.circle")
                     .foregroundColor(.textPrimary)
             }
@@ -189,7 +283,11 @@ struct ProfileView: View {
             Button(role: .destructive) {
                 signOut()
             } label: {
-                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                if authManager.isGuest {
+                    Label("Exit Guest Mode", systemImage: "rectangle.portrait.and.arrow.right")
+                } else {
+                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                }
             }
         }
     }
@@ -200,7 +298,7 @@ struct ProfileView: View {
         do {
             try authManager.signOut()
         } catch {
-            print("Error signing out: \(error)")
+            // Error signing out
         }
     }
 }

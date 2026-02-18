@@ -154,7 +154,7 @@ struct PreferencesView: View {
                     body: preferences
                 )
             } catch {
-                print("Error saving preferences: \(error)")
+                // Error saving preferences
             }
         }
     }

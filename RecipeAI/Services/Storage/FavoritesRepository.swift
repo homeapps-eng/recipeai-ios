@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import Combine
 
 @MainActor
 final class FavoritesRepository: ObservableObject {
@@ -27,7 +28,6 @@ final class FavoritesRepository: ObservableObject {
             fetchAllFavorites()
         } catch {
             self.error = error
-            print("Error saving favorite: \(error)")
         }
     }
 
@@ -44,7 +44,6 @@ final class FavoritesRepository: ObservableObject {
             }
         } catch {
             self.error = error
-            print("Error removing favorite: \(error)")
         }
     }
 
@@ -156,7 +155,7 @@ final class FavoritesRepository: ObservableObject {
                 body: request
             )
         } catch {
-            print("Error adding favorite to backend: \(error)")
+            // Error adding favorite to backend
         }
     }
 
@@ -166,7 +165,24 @@ final class FavoritesRepository: ObservableObject {
                 endpoint: .removeFavorite(userId: userId, recipeId: recipeId)
             )
         } catch {
-            print("Error removing favorite from backend: \(error)")
+            // Error removing favorite from backend
+        }
+    }
+
+    // MARK: - Clear All
+
+    func clearAll() {
+        let descriptor = FetchDescriptor<FavoriteRecipe>()
+
+        do {
+            let allFavorites = try modelContext.fetch(descriptor)
+            for favorite in allFavorites {
+                modelContext.delete(favorite)
+            }
+            try modelContext.save()
+            favorites = []
+        } catch {
+            self.error = error
         }
     }
 }
