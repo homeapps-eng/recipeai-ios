@@ -12,21 +12,26 @@ struct SubscriptionView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Header
-                headerSection
-
-                // Show different content based on subscription status
-                if storeKit.isPremium {
-                    // Premium user: show status
-                    statusSection
-                    manageSection
+                if userDefaults.isGuestUser {
+                    // Guest users must create an account first
+                    guestSection
                 } else {
-                    // Non-premium: show features, plans, and subscribe button
-                    featuresSection
-                    plansSection
-                    subscribeButton
-                    restoreButton
-                    legalLinksSection
+                    // Header
+                    headerSection
+
+                    // Show different content based on subscription status
+                    if storeKit.isPremium {
+                        // Premium user: show status
+                        statusSection
+                        manageSection
+                    } else {
+                        // Non-premium: show features, plans, and subscribe button
+                        featuresSection
+                        plansSection
+                        subscribeButton
+                        restoreButton
+                        legalLinksSection
+                    }
                 }
             }
             .padding()
@@ -63,6 +68,29 @@ struct SubscriptionView: View {
             Text("You are now a Premium member!")
         }
         .loadingOverlay(isLoading: storeKit.isLoading)
+    }
+
+    // MARK: - Guest Section
+
+    private var guestSection: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "crown.fill")
+                .font(.system(size: 50))
+                .foregroundColor(.yellow)
+
+            Text("Go Premium")
+                .font(.appTitle1)
+                .foregroundColor(.textPrimary)
+
+            Text("Create an account to subscribe and unlock unlimited recipes and features")
+                .font(.appSubheadline)
+                .foregroundColor(.textSecondary)
+                .multilineTextAlignment(.center)
+
+            featuresSection
+
+            GuestConversionView()
+        }
     }
 
     // MARK: - Header Section
@@ -133,6 +161,18 @@ struct SubscriptionView: View {
                 }
             }
 
+            // Show pending plan switch info
+            if let pending = storeKit.pendingSwitchProduct {
+                HStack {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundColor(.blue)
+                    Text("Switching to \(pending.displayName) at next renewal.")
+                        .font(.appCaption1)
+                        .foregroundColor(.textSecondary)
+                }
+                .padding(.top, 4)
+            }
+
             // Show message if subscription is expiring
             if isExpiring {
                 HStack {
@@ -176,15 +216,27 @@ struct SubscriptionView: View {
     // MARK: - Status Helpers
 
     private var planDisplayName: String {
-        // Prefer backend status, fallback to local
+        // If there's a pending switch, show the upcoming plan
+        if let pending = storeKit.pendingSwitchProduct {
+            return pending.displayName
+        }
+        // Prefer local StoreKit data
+        if let product = storeKit.purchasedSubscriptions.first {
+            return product.displayName
+        }
+        // Fallback to backend
         if let status = storeKit.subscriptionStatus, let planName = status.planName {
             return planName
         }
-        return storeKit.purchasedSubscriptions.first?.displayName ?? "Premium"
+        return "Premium"
     }
 
     private var isExpiring: Bool {
-        // Check if user cancelled subscription
+        // Check local StoreKit auto-renew status first (most up-to-date)
+        if !storeKit.isAutoRenewing {
+            return true
+        }
+        // Fallback to backend status
         if let status = storeKit.subscriptionStatus {
             return status.statusType == .expiring
         }
@@ -192,6 +244,9 @@ struct SubscriptionView: View {
     }
 
     private var statusDisplayName: String {
+        if isExpiring {
+            return SubscriptionStatusType.expiring.displayName
+        }
         if let status = storeKit.subscriptionStatus {
             return status.statusType.displayName
         }
@@ -199,6 +254,9 @@ struct SubscriptionView: View {
     }
 
     private var statusColor: Color {
+        if isExpiring {
+            return .orange
+        }
         if let status = storeKit.subscriptionStatus {
             switch status.statusType {
             case .active: return .green
@@ -210,11 +268,15 @@ struct SubscriptionView: View {
     }
 
     private var displayDate: Date? {
-        // Prefer backend date
+        // Prefer local StoreKit date (most accurate for plan switches)
+        if let date = storeKit.subscriptionExpirationDate {
+            return date
+        }
+        // Fallback to backend date
         if let status = storeKit.subscriptionStatus, let date = status.periodEndDate {
             return date
         }
-        return storeKit.subscriptionExpirationDate
+        return nil
     }
 
     // MARK: - Features Section

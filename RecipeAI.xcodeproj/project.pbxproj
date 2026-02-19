@@ -7,13 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		97A3A68132DD2B8FFD955AAC /* Pods_RecipeAI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0B1143137A04A17058C105EF /* Pods_RecipeAI.framework */; };
+		D639EEE72F45CD8900923CB5 /* Configuration.storekit in Resources */ = {isa = PBXBuildFile; fileRef = D639EEE62F45CD8900923CB5 /* Configuration.storekit */; };
+		D6B7ADDBD12A33DB7CB8E7D0 /* Pods_RecipeAI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7A7C18ED97559F1B14E9B893 /* Pods_RecipeAI.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0B1143137A04A17058C105EF /* Pods_RecipeAI.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RecipeAI.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		22057966D3D6E3AC6D7ED249 /* Pods-RecipeAI.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RecipeAI.release.xcconfig"; path = "Target Support Files/Pods-RecipeAI/Pods-RecipeAI.release.xcconfig"; sourceTree = "<group>"; };
-		3E7F37A51DFF66D00CB45D41 /* Pods-RecipeAI.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RecipeAI.debug.xcconfig"; path = "Target Support Files/Pods-RecipeAI/Pods-RecipeAI.debug.xcconfig"; sourceTree = "<group>"; };
+		49AD449465B37ADE3C53175F /* Pods-RecipeAI.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RecipeAI.release.xcconfig"; path = "Target Support Files/Pods-RecipeAI/Pods-RecipeAI.release.xcconfig"; sourceTree = "<group>"; };
+		7A7C18ED97559F1B14E9B893 /* Pods_RecipeAI.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RecipeAI.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B926A9C48F4655274AB1D59F /* Pods-RecipeAI.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RecipeAI.debug.xcconfig"; path = "Target Support Files/Pods-RecipeAI/Pods-RecipeAI.debug.xcconfig"; sourceTree = "<group>"; };
+		D639EEE62F45CD8900923CB5 /* Configuration.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Configuration.storekit; sourceTree = "<group>"; };
 		D64B440B2EFBCF4400D22CA3 /* RecipeAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RecipeAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -44,17 +46,17 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				97A3A68132DD2B8FFD955AAC /* Pods_RecipeAI.framework in Frameworks */,
+				D6B7ADDBD12A33DB7CB8E7D0 /* Pods_RecipeAI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		38F62916A8C4913B5EDEEEAC /* Frameworks */ = {
+		083F41FBB9F91D9890EE789C /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				0B1143137A04A17058C105EF /* Pods_RecipeAI.framework */,
+				7A7C18ED97559F1B14E9B893 /* Pods_RecipeAI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -62,8 +64,8 @@
 		5896119B2AD9A9AA8EA56143 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				3E7F37A51DFF66D00CB45D41 /* Pods-RecipeAI.debug.xcconfig */,
-				22057966D3D6E3AC6D7ED249 /* Pods-RecipeAI.release.xcconfig */,
+				B926A9C48F4655274AB1D59F /* Pods-RecipeAI.debug.xcconfig */,
+				49AD449465B37ADE3C53175F /* Pods-RecipeAI.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -71,10 +73,11 @@
 		D64B44022EFBCF4400D22CA3 = {
 			isa = PBXGroup;
 			children = (
+				D639EEE62F45CD8900923CB5 /* Configuration.storekit */,
 				D64B440D2EFBCF4400D22CA3 /* RecipeAI */,
 				D64B440C2EFBCF4400D22CA3 /* Products */,
 				5896119B2AD9A9AA8EA56143 /* Pods */,
-				38F62916A8C4913B5EDEEEAC /* Frameworks */,
+				083F41FBB9F91D9890EE789C /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -93,12 +96,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = D64B44162EFBCF4700D22CA3 /* Build configuration list for PBXNativeTarget "RecipeAI" */;
 			buildPhases = (
-				35A12731100575FA3F68EA57 /* [CP] Check Pods Manifest.lock */,
+				677BD7D830956570E7B9DC01 /* [CP] Check Pods Manifest.lock */,
 				D64B44072EFBCF4400D22CA3 /* Sources */,
 				D64B44082EFBCF4400D22CA3 /* Frameworks */,
 				D64B44092EFBCF4400D22CA3 /* Resources */,
-				07B548DFE9F095AE5C21E4C9 /* [CP] Embed Pods Frameworks */,
-				4ED71DD4D3A70263F79ED05E /* [CP] Copy Pods Resources */,
+				FD35F4B6ABCCBF4344688AE4 /* [CP] Embed Pods Frameworks */,
+				30814176C10EF58A7B62A11C /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -151,34 +154,35 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D639EEE72F45CD8900923CB5 /* Configuration.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		07B548DFE9F095AE5C21E4C9 /* [CP] Embed Pods Frameworks */ = {
+		30814176C10EF58A7B62A11C /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+				"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
 			inputPaths = (
 			);
-			name = "[CP] Embed Pods Frameworks";
+			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+				"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-resources-${CONFIGURATION}-output-files.xcfilelist",
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-frameworks.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		35A12731100575FA3F68EA57 /* [CP] Check Pods Manifest.lock */ = {
+		677BD7D830956570E7B9DC01 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -200,25 +204,25 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		4ED71DD4D3A70263F79ED05E /* [CP] Copy Pods Resources */ = {
+		FD35F4B6ABCCBF4344688AE4 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-resources-${CONFIGURATION}-input-files.xcfilelist",
+				"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
 			inputPaths = (
 			);
-			name = "[CP] Copy Pods Resources";
+			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-resources-${CONFIGURATION}-output-files.xcfilelist",
+				"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-frameworks-${CONFIGURATION}-output-files.xcfilelist",
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-resources.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RecipeAI/Pods-RecipeAI-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -355,18 +359,17 @@
 		};
 		D64B44172EFBCF4700D22CA3 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 3E7F37A51DFF66D00CB45D41 /* Pods-RecipeAI.debug.xcconfig */;
+			baseConfigurationReference = B926A9C48F4655274AB1D59F /* Pods-RecipeAI.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = RecipeAI/RecipeAI.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 777Y8L34DP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = RecipeAI/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
+				INFOPLIST_FILE = "$(SRCROOT)/RecipeAI/Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -376,7 +379,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.8;
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.homeapps.recipeai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -395,18 +398,17 @@
 		};
 		D64B44182EFBCF4700D22CA3 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 22057966D3D6E3AC6D7ED249 /* Pods-RecipeAI.release.xcconfig */;
+			baseConfigurationReference = 49AD449465B37ADE3C53175F /* Pods-RecipeAI.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = RecipeAI/RecipeAI.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 777Y8L34DP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = RecipeAI/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
+				INFOPLIST_FILE = "$(SRCROOT)/RecipeAI/Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -416,7 +418,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.8;
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.homeapps.recipeai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

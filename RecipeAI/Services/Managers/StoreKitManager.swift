@@ -10,6 +10,8 @@ final class StoreKitManager: ObservableObject {
     @Published var purchasedSubscriptions: [Product] = []
     @Published var subscriptionStatus: SubscriptionStatus?
     @Published var subscriptionExpirationDate: Date?
+    @Published var isAutoRenewing = true
+    @Published var pendingSwitchProduct: Product?
     @Published var isLoading = false
     @Published var error: Error?
 
@@ -33,6 +35,15 @@ final class StoreKitManager: ObservableObject {
 
     var isPremium: Bool {
         !purchasedSubscriptions.isEmpty
+    }
+
+    func resetOnSignOut() {
+        purchasedSubscriptions = []
+        subscriptionStatus = nil
+        subscriptionExpirationDate = nil
+        isAutoRenewing = true
+        pendingSwitchProduct = nil
+        error = nil
     }
 
     var monthlyProduct: Product? {
@@ -127,35 +138,90 @@ final class StoreKitManager: ObservableObject {
     // MARK: - Update Subscription Status
 
     func updateSubscriptionStatus() async {
-        var purchased: [Product] = []
-        var latestExpirationDate: Date?
+        // Backend is the source of truth for which user has a subscription.
+        // StoreKit entitlements are device-level (Apple ID), not app-user-level,
+        // so a guest or different user on the same device would see stale data.
+        guard let userId = UserDefaultsManager.shared.userId,
+              !UserDefaultsManager.shared.isGuestUser else {
+            // Guest users cannot have subscriptions
+            purchasedSubscriptions = []
+            subscriptionStatus = nil
+            subscriptionExpirationDate = nil
+            isAutoRenewing = true
+            pendingSwitchProduct = nil
+            UserDefaultsManager.shared.isPremium = false
+            return
+        }
+
+        // Step 1: Check backend first to confirm this user has an active subscription
+        await fetchStatusFromBackend(userId: userId)
+
+        guard subscriptionStatus?.isActive == true else {
+            // Backend says not active — don't trust device-level StoreKit entitlements
+            purchasedSubscriptions = []
+            subscriptionExpirationDate = nil
+            pendingSwitchProduct = nil
+            isAutoRenewing = true
+            UserDefaultsManager.shared.isPremium = false
+            return
+        }
+
+        // Step 2: Get the most recent active transaction from entitlements
+        var mostRecentTransaction: Transaction?
+        var isAutoRenewing = true
 
         for await result in Transaction.currentEntitlements {
             do {
                 let transaction = try checkVerified(result)
 
-                if let product = products.first(where: { $0.id == transaction.productID }) {
-                    purchased.append(product)
-                }
-
-                // Get expiration date from transaction
-                if let expirationDate = transaction.expirationDate {
-                    if latestExpirationDate == nil || expirationDate > latestExpirationDate! {
-                        latestExpirationDate = expirationDate
-                    }
+                // Keep the most recently purchased transaction (handles plan switches)
+                if mostRecentTransaction == nil || transaction.purchaseDate > mostRecentTransaction!.purchaseDate {
+                    mostRecentTransaction = transaction
                 }
             } catch {
                 // Transaction verification failed
             }
         }
 
+        // Step 3: Get auto-renewal status and pending switch info
+        var pendingSwitch: Product?
+        if let currentTx = mostRecentTransaction,
+           let product = products.first(where: { $0.id == currentTx.productID }),
+           let subscription = product.subscription {
+            do {
+                let statuses = try await subscription.status
+                for status in statuses {
+                    if status.state == .subscribed || status.state == .inGracePeriod {
+                        let renewalInfo = try checkVerified(status.renewalInfo)
+                        isAutoRenewing = renewalInfo.willAutoRenew
+
+                        // Detect pending plan switch (crossgrade/downgrade deferred to next renewal)
+                        if renewalInfo.currentProductID != currentTx.productID {
+                            pendingSwitch = products.first(where: { $0.id == renewalInfo.currentProductID })
+                        }
+                    }
+                }
+            } catch {
+                // Failed to get renewal info
+            }
+        }
+
+        // Step 4: Update published properties
+        var purchased: [Product] = []
+        if let tx = mostRecentTransaction,
+           let product = products.first(where: { $0.id == tx.productID }) {
+            purchased.append(product)
+        }
+
         purchasedSubscriptions = purchased
-        subscriptionExpirationDate = latestExpirationDate
+        subscriptionExpirationDate = mostRecentTransaction?.expirationDate
+        self.isAutoRenewing = isAutoRenewing
+        self.pendingSwitchProduct = pendingSwitch
         UserDefaultsManager.shared.isPremium = !purchased.isEmpty
 
-        // Also fetch from backend for accuracy
-        if let userId = UserDefaultsManager.shared.userId {
-            await fetchStatusFromBackend(userId: userId)
+        // Sync current state to backend
+        if let tx = mostRecentTransaction {
+            await syncWithBackend(transaction: tx, willAutoRenew: isAutoRenewing)
         }
     }
 
@@ -189,11 +255,10 @@ final class StoreKitManager: ObservableObject {
 
     // MARK: - Backend Sync
 
-    private func syncWithBackend(transaction: Transaction) async {
+    private func syncWithBackend(transaction: Transaction, willAutoRenew: Bool? = nil) async {
         guard let userId = UserDefaultsManager.shared.userId else { return }
 
         do {
-            // Get expiration date in milliseconds
             let expiresMs: Int64? = transaction.expirationDate.map { Int64($0.timeIntervalSince1970 * 1000) }
 
             let request = AppleSubscriptionRequest(
@@ -202,7 +267,7 @@ final class StoreKitManager: ObservableObject {
                 transactionId: String(transaction.id),
                 originalTransactionId: String(transaction.originalID),
                 expiresDate: expiresMs,
-                autoRenewStatus: nil // Will be set by webhook based on renewal info
+                autoRenewStatus: willAutoRenew
             )
 
             let _: AppleSubscriptionResponse = try await NetworkManager.shared.post(
@@ -220,15 +285,9 @@ final class StoreKitManager: ObservableObject {
                 endpoint: .getSubscriptionStatus(userId: userId)
             )
             subscriptionStatus = status
-
-            // If backend says not active, override local StoreKit cache
-            if !status.isActive {
-                purchasedSubscriptions = []
-                subscriptionExpirationDate = nil
-                UserDefaultsManager.shared.isPremium = false
-            }
         } catch {
-            // Failed to fetch status from backend
+            // Failed to fetch — treat as not active to prevent stale data leaking
+            subscriptionStatus = nil
         }
     }
 }

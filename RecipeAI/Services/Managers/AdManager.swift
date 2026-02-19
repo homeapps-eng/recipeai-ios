@@ -2,6 +2,8 @@ import Foundation
 import UIKit
 import Combine
 import GoogleMobileAds
+import AppTrackingTransparency
+import AdSupport
 
 @MainActor
 final class AdManager: NSObject, ObservableObject {
@@ -27,6 +29,20 @@ final class AdManager: NSObject, ObservableObject {
         MobileAds.shared.start { _ in
             Task {
                 await self.loadRewardedAd()
+            }
+        }
+    }
+
+    // MARK: - App Tracking Transparency
+
+    func requestTrackingPermission() async {
+        guard ATTrackingManager.trackingAuthorizationStatus == .notDetermined else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            ATTrackingManager.requestTrackingAuthorization { _ in
+                continuation.resume()
             }
         }
     }
@@ -120,12 +136,22 @@ final class AdManager: NSObject, ObservableObject {
         return topController
     }
 
-    /// Shows rewarded ad with retry logic if view controller is busy
+    /// Shows rewarded ad with retry logic if view controller is busy.
+    /// Requests ATT permission before the first ad for better UX.
     func showRewardedAdWhenReady(
         onReward: @escaping () -> Void,
         onError: @escaping (String) -> Void,
         retryCount: Int = 0
     ) {
+        // Request ATT before first ad (contextual, better opt-in rate)
+        if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
+            Task {
+                await requestTrackingPermission()
+                self.showRewardedAdWhenReady(onReward: onReward, onError: onError, retryCount: retryCount)
+            }
+            return
+        }
+
         let maxRetries = 5
         let retryDelay = 0.3
 
