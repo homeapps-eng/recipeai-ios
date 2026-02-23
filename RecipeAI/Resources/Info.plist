@@ -17,9 +17,9 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.9</string>
+    <string>1.0.10</string>
     <key>CFBundleVersion</key>
-    <string>12</string>
+    <string>13</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>UIApplicationSceneManifest</key>
@@ -64,7 +64,7 @@
 
     <!-- AdMob App ID -->
     <key>GADApplicationIdentifier</key>
-    <string>ca-app-pub-5036694200430445~8964952039</string>
+    <string>ca-app-pub-5036694200430445~4140293933</string>
 
     <!-- AdMob User Tracking Description -->
     <key>NSUserTrackingUsageDescription</key>

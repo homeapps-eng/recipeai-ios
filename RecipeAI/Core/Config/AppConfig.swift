@@ -44,7 +44,7 @@ enum AppConfig {
         case .debug:
             return "ca-app-pub-3940256099942544/5224354917" // Test Ad Unit ID
         case .release:
-            return "ca-app-pub-5036694200430445/7995805436"
+            return "ca-app-pub-5036694200430445/9151047657"
         }
     }
 
