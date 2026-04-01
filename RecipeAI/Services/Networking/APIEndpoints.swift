@@ -21,6 +21,7 @@ enum APIEndpoint {
 
     case generateRecipes
     case generateSingleRecipe
+    case generateByText
     case calculateCalories
 
     // MARK: - User Profile
@@ -81,6 +82,8 @@ enum APIEndpoint {
             return "/api/v1/recipe/generateMultiple"
         case .generateSingleRecipe:
             return "/api/v1/recipe/generateSingle"
+        case .generateByText:
+            return "/api/v1/recipe/generateByText"
         case .calculateCalories:
             return "/api/v1/recipe/calculateCalories"
 
@@ -125,7 +128,7 @@ enum APIEndpoint {
         // POST methods
         case .signUp, .signIn, .googleSignIn, .appleSignIn, .verifyToken,
              .guestRegister, .guestConvert,
-             .generateRecipes, .generateSingleRecipe, .calculateCalories,
+             .generateRecipes, .generateSingleRecipe, .generateByText, .calculateCalories,
              .uploadAvatar, .addFavorite, .verifyAppleSubscription, .submitSupport:
             return "POST"
 

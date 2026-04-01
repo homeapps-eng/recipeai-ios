@@ -49,6 +49,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>RecipeAI needs camera access to scan ingredients and recipes</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>RecipeAI needs microphone access for voice recipe generation</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>RecipeAI uses speech recognition to understand your recipe requests</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>RecipeAI needs photo library access to select recipe images</string>
 	<key>NSUserTrackingUsageDescription</key>
