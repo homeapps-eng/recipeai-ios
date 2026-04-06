@@ -1,9 +1,10 @@
 import Foundation
 import Speech
 import AVFoundation
+import Combine
 
 @MainActor
-final class VoiceRecipeViewModel: ObservableObject {
+final class VoiceRecipeViewModel: NSObject, ObservableObject {
     @Published var transcribedText = ""
     @Published var isListening = false
     @Published var isGenerating = false
@@ -19,8 +20,9 @@ final class VoiceRecipeViewModel: ObservableObject {
     private let usageTracker = RecipeUsageTracker.shared
     private let adManager = AdManager.shared
 
-    init() {
+    override init() {
         speechRecognizer = SFSpeechRecognizer(locale: Locale.current)
+        super.init()
     }
 
     // MARK: - Permissions
@@ -226,9 +228,7 @@ final class VoiceRecipeViewModel: ObservableObject {
         )
     }
 
-    deinit {
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        recognitionTask?.cancel()
+    nonisolated deinit {
+        // Audio cleanup happens in onDisappear via stopListening()
     }
 }
