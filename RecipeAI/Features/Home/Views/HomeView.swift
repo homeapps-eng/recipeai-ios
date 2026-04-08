@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @State private var showCamera = false
+    @State private var showVoice = false
     @State private var showRecipes = false
     @State private var showCalories = false
     @State private var showSubscription = false
@@ -18,8 +19,8 @@ struct HomeView: View {
                 // Main Content
                 mainContent
 
-                // Camera FAB
-                cameraFAB
+                // FABs
+                fabButtons
             }
             .navigationTitle("RecipeAI")
             .navigationBarTitleDisplayMode(.large)
@@ -36,6 +37,12 @@ struct HomeView: View {
                         showCalories = true
                     }
                 )
+            }
+            .sheet(isPresented: $showVoice) {
+                VoiceView { recipes in
+                    generatedRecipes = recipes
+                    showRecipes = true
+                }
             }
             .navigationDestination(isPresented: $showRecipes) {
                 RecipesListView(recipes: generatedRecipes)
@@ -287,23 +294,39 @@ struct HomeView: View {
         .padding(.vertical, 60)
     }
 
-    // MARK: - Camera FAB
+    // MARK: - FAB Buttons
 
-    private var cameraFAB: some View {
+    private var fabButtons: some View {
         VStack {
             Spacer()
             HStack {
                 Spacer()
-                Button {
-                    showCamera = true
-                } label: {
-                    Image(systemName: "camera.fill")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                        .frame(width: 60, height: 60)
-                        .background(Color.brandGreen)
-                        .clipShape(Circle())
-                        .shadow(color: .brandGreen.opacity(0.4), radius: 8, x: 0, y: 4)
+                VStack(spacing: 16) {
+                    // Voice FAB
+                    Button {
+                        showVoice = true
+                    } label: {
+                        Image(systemName: "mic.fill")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                            .frame(width: 60, height: 60)
+                            .background(Color.brandGreen)
+                            .clipShape(Circle())
+                            .shadow(color: .brandGreen.opacity(0.4), radius: 8, x: 0, y: 4)
+                    }
+
+                    // Camera FAB
+                    Button {
+                        showCamera = true
+                    } label: {
+                        Image(systemName: "camera.fill")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                            .frame(width: 60, height: 60)
+                            .background(Color.brandGreen)
+                            .clipShape(Circle())
+                            .shadow(color: .brandGreen.opacity(0.4), radius: 8, x: 0, y: 4)
+                    }
                 }
                 .padding(.trailing, 24)
                 .padding(.bottom, 24)

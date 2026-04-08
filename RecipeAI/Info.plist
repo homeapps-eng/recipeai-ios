@@ -17,7 +17,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.10</string>
+	<string>1.1.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -40,7 +40,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>13</string>
+	<string>14</string>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-5036694200430445~4140293933</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -49,6 +49,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>RecipeAI needs camera access to scan ingredients and recipes</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>RecipeAI needs microphone access for voice recipe generation</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>RecipeAI uses speech recognition to understand your recipe requests</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>RecipeAI needs photo library access to select recipe images</string>
 	<key>NSUserTrackingUsageDescription</key>
