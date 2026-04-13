@@ -64,7 +64,9 @@ struct LoadingView: View {
 }
 
 struct MainTabView: View {
+    @EnvironmentObject var userDefaultsManager: UserDefaultsManager
     @State private var selectedTab = 0
+    @State private var showLanguagePicker = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -83,6 +85,65 @@ struct MainTabView: View {
                 .tag(1)
         }
         .tint(.brandGreen)
+        .onAppear {
+            if !userDefaultsManager.languageSelected {
+                showLanguagePicker = true
+            }
+        }
+        .sheet(isPresented: $showLanguagePicker) {
+            LanguagePickerSheet()
+        }
+    }
+}
+
+struct LanguagePickerSheet: View {
+    @EnvironmentObject var userDefaultsManager: UserDefaultsManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var selected: AppLanguage = .en
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("Choose your recipe language")
+                    .font(.appSubheadline)
+                    .foregroundColor(.textSecondary)
+                    .padding(.top)
+
+                List(AppLanguage.allCases) { lang in
+                    Button {
+                        selected = lang
+                    } label: {
+                        HStack {
+                            Text(lang.displayName)
+                                .foregroundColor(.textPrimary)
+                            Spacer()
+                            if selected == lang {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.brandGreen)
+                            }
+                        }
+                    }
+                }
+                .listStyle(.plain)
+            }
+            .navigationTitle("Recipe Language")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        userDefaultsManager.selectedLanguage = selected
+                        userDefaultsManager.languageSelected = true
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(.brandGreen)
+                }
+            }
+        }
+        .onAppear {
+            selected = userDefaultsManager.selectedLanguage
+        }
+        .interactiveDismissDisabled()
     }
 }
 

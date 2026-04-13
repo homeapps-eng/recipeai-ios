@@ -28,6 +28,8 @@ final class UserDefaultsManager: ObservableObject {
         static let pushNotifications = "push_notifications"
         static let recipeSuggestions = "recipe_suggestions"
         static let measurementUnits = "measurement_units"
+        static let selectedLanguage = "selected_language"
+        static let languageSelected = "language_selected"
 
         // Subscription
         static let isPremium = "is_premium"
@@ -109,6 +111,14 @@ final class UserDefaultsManager: ObservableObject {
         didSet { defaults.set(measurementUnits.rawValue, forKey: Keys.measurementUnits) }
     }
 
+    @Published var selectedLanguage: AppLanguage {
+        didSet { defaults.set(selectedLanguage.rawValue, forKey: Keys.selectedLanguage) }
+    }
+
+    @Published var languageSelected: Bool {
+        didSet { defaults.set(languageSelected, forKey: Keys.languageSelected) }
+    }
+
     // MARK: - Subscription Properties
 
     @Published var isPremium: Bool {
@@ -162,6 +172,9 @@ final class UserDefaultsManager: ObservableObject {
         self.recipeSuggestionsEnabled = defaults.object(forKey: Keys.recipeSuggestions) as? Bool ?? true
         let unitString = defaults.string(forKey: Keys.measurementUnits) ?? MeasurementUnit.metric.rawValue
         self.measurementUnits = MeasurementUnit(rawValue: unitString) ?? .metric
+        let langString = defaults.string(forKey: Keys.selectedLanguage) ?? AppLanguage.fromLocale(Locale.current).rawValue
+        self.selectedLanguage = AppLanguage(rawValue: langString) ?? .en
+        self.languageSelected = defaults.bool(forKey: Keys.languageSelected)
 
         // Subscription
         self.isPremium = defaults.bool(forKey: Keys.isPremium)
@@ -222,6 +235,8 @@ final class UserDefaultsManager: ObservableObject {
         pushNotificationsEnabled = true
         recipeSuggestionsEnabled = true
         measurementUnits = .metric
+        selectedLanguage = AppLanguage.fromLocale(Locale.current)
+        languageSelected = false
         isPremium = false
 
         // Guest mode

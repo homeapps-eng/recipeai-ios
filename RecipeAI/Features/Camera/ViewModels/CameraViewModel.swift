@@ -114,7 +114,10 @@ final class CameraViewModel: NSObject, ObservableObject {
             }
 
             // Make API request
-            let formData = ["image": base64Image]
+            let formData = [
+                "image": base64Image,
+                "language": UserDefaultsManager.shared.selectedLanguage.rawValue
+            ]
             let response: RecipeResponse = try await NetworkManager.shared.requestFormEncoded(
                 endpoint: .generateRecipes,
                 formData: formData
@@ -166,7 +169,10 @@ final class CameraViewModel: NSObject, ObservableObject {
             }
 
             // Make API request
-            let formData = ["image": base64Image]
+            let formData = [
+                "image": base64Image,
+                "language": UserDefaultsManager.shared.selectedLanguage.rawValue
+            ]
             let response: CaloriesResponse = try await NetworkManager.shared.requestFormEncoded(
                 endpoint: .calculateCalories,
                 formData: formData
