@@ -114,6 +114,8 @@ struct LanguagePickerSheet: View {
                         selected = lang
                     } label: {
                         HStack {
+                            Text(lang.flag)
+                                .font(.title2)
                             Text(lang.displayName)
                                 .foregroundColor(.textPrimary)
                             Spacer()

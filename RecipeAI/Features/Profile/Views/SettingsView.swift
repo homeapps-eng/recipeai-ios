@@ -62,7 +62,7 @@ struct SettingsView: View {
         Section("Preferences") {
             Picker("Recipe Language", selection: $userDefaults.selectedLanguage) {
                 ForEach(AppLanguage.allCases) { lang in
-                    Text(lang.displayName).tag(lang)
+                    Text("\(lang.flag) \(lang.displayName)").tag(lang)
                 }
             }
 

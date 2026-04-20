@@ -5,6 +5,25 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var flag: String {
+        switch self {
+        case .en: return "🇺🇸"
+        case .es: return "🇪🇸"
+        case .zh: return "🇨🇳"
+        case .hi: return "🇮🇳"
+        case .ja: return "🇯🇵"
+        case .fr: return "🇫🇷"
+        case .th: return "🇹🇭"
+        case .ko: return "🇰🇷"
+        case .vi: return "🇻🇳"
+        case .tr: return "🇹🇷"
+        case .hy: return "🇦🇲"
+        case .el: return "🇬🇷"
+        case .ar: return "🇸🇦"
+        case .it: return "🇮🇹"
+        }
+    }
+
     var displayName: String {
         switch self {
         case .en: return "English"
