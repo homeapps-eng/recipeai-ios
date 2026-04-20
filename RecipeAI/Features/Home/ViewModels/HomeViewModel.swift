@@ -49,6 +49,7 @@ final class HomeViewModel: ObservableObject {
             if let cuisines = preferences.cuisines, !cuisines.isEmpty {
                 formData["cuisine"] = cuisines.randomElement() ?? ""
             }
+            formData["language"] = UserDefaultsManager.shared.selectedLanguage.rawValue
 
             let response: SingleRecipeResponse = try await NetworkManager.shared.requestFormEncoded(
                 endpoint: .generateSingleRecipe,

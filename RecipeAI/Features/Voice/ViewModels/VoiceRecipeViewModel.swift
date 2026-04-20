@@ -12,6 +12,7 @@ final class VoiceRecipeViewModel: NSObject, ObservableObject {
     @Published var errorMessage = ""
     @Published var statusMessage = "Tap the mic to speak"
     @Published var showAdPrompt = false
+    @Published var voiceLanguageNotice: String?
 
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -21,7 +22,18 @@ final class VoiceRecipeViewModel: NSObject, ObservableObject {
     private let adManager = AdManager.shared
 
     override init() {
-        speechRecognizer = SFSpeechRecognizer(locale: Locale.current)
+        let selectedLanguage = UserDefaultsManager.shared.selectedLanguage
+        let selectedLocale = selectedLanguage.locale
+        let recognizer = SFSpeechRecognizer(locale: selectedLocale)
+        if let recognizer, recognizer.isAvailable {
+            speechRecognizer = recognizer
+            voiceLanguageNotice = nil
+        } else {
+            speechRecognizer = SFSpeechRecognizer(locale: Locale.current) ?? SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+            if selectedLanguage != .en {
+                voiceLanguageNotice = "Voice input is not available in \(selectedLanguage.displayName). Speak in English — your recipes will still be generated in \(selectedLanguage.displayName)."
+            }
+        }
         super.init()
     }
 
@@ -169,7 +181,10 @@ final class VoiceRecipeViewModel: NSObject, ObservableObject {
 
         do {
             // Build form data with prompt and user preferences
-            var formData: [String: String] = ["prompt": prompt]
+            var formData: [String: String] = [
+                "prompt": prompt,
+                "language": UserDefaultsManager.shared.selectedLanguage.rawValue
+            ]
 
             let preferences = UserDefaultsManager.shared.getPreferences()
             if let categories = preferences.categories, !categories.isEmpty {

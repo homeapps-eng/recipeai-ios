@@ -36,6 +36,21 @@ struct VoiceView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
+            // Language notice
+            if let notice = viewModel.voiceLanguageNotice {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.orange)
+                    Text(notice)
+                        .font(.appCaption1)
+                        .foregroundColor(.textSecondary)
+                }
+                .padding(12)
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(10)
+                .padding(.horizontal)
+            }
+
             Spacer()
 
             // Mic Button

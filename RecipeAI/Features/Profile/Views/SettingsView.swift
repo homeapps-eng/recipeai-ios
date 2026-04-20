@@ -60,6 +60,12 @@ struct SettingsView: View {
 
     private var preferencesSection: some View {
         Section("Preferences") {
+            Picker("Recipe Language", selection: $userDefaults.selectedLanguage) {
+                ForEach(AppLanguage.allCases) { lang in
+                    Text("\(lang.flag) \(lang.displayName)").tag(lang)
+                }
+            }
+
             Picker("Measurement Units", selection: $userDefaults.measurementUnits) {
                 ForEach(MeasurementUnit.allCases, id: \.self) { unit in
                     Text(unit.rawValue).tag(unit)
