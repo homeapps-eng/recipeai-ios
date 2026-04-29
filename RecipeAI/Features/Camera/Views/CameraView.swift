@@ -88,7 +88,9 @@ struct CameraView: View {
                 }
             }
             .aiLoadingOverlay(
-                isLoading: viewModel.isLoading,
+                // Calorie mode uses the inline CalorieScanLoaderView in `imagePreview`,
+                // so suppress the full-screen modal there.
+                isLoading: viewModel.isLoading && viewModel.loadingMode != .calculatingCalories,
                 mode: viewModel.loadingMode,
                 image: viewModel.capturedImage
             )
@@ -135,10 +137,20 @@ struct CameraView: View {
     // MARK: - Image Preview
 
     private func imagePreview(_ image: UIImage) -> some View {
-        Image(uiImage: image)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .ignoresSafeArea()
+        ZStack {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .ignoresSafeArea()
+
+            // AI scan animation overlaid on the captured photo while calorie
+            // estimation is in flight (the recipe-generation flow keeps the
+            // existing full-screen modal).
+            if viewModel.isLoading, viewModel.loadingMode == .calculatingCalories {
+                CalorieScanLoaderView()
+                    .ignoresSafeArea()
+            }
+        }
     }
 
     // MARK: - Controls Overlay

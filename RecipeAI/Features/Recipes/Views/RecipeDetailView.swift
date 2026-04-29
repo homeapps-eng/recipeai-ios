@@ -66,39 +66,13 @@ struct RecipeDetailView: View {
     // MARK: - Recipe Image
 
     private var recipeImage: some View {
-        GeometryReader { geometry in
-            Group {
-                if let imageUrl = recipe.imageUrl, let url = URL(string: imageUrl) {
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        placeholderImage
-                    }
-                } else if let path = recipe.capturedImagePath,
-                          let uiImage = UIImage(contentsOfFile: path) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    placeholderImage
-                }
-            }
-            .frame(width: geometry.size.width, height: 250)
-            .clipped()
-        }
+        // Unified placeholder + bubble animation + auto-polling.
+        RecipeImageView(
+            recipeId: recipe.id,
+            initialImageUrl: recipe.imageUrl,
+            cornerRadius: 0
+        )
         .frame(height: 250)
-    }
-
-    private var placeholderImage: some View {
-        Rectangle()
-            .fill(Color.brandGreenLight)
-            .overlay {
-                Image(systemName: "fork.knife")
-                    .font(.system(size: 60))
-                    .foregroundColor(.brandGreen)
-            }
     }
 
     // MARK: - Recipe Info

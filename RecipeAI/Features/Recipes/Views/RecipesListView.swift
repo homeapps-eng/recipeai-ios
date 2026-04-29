@@ -54,37 +54,14 @@ struct RecipeCardView: View {
     }
 
     private var recipeImage: some View {
-        Group {
-            if let imageUrl = recipe.imageUrl, let url = URL(string: imageUrl) {
-                AsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    placeholderImage
-                }
-            } else if let path = recipe.capturedImagePath,
-                      let uiImage = UIImage(contentsOfFile: path) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                placeholderImage
-            }
-        }
+        // Unified placeholder + bubble animation + auto-polling for the
+        // AI-generated image. Same treatment as Home / Detail.
+        RecipeImageView(
+            recipeId: recipe.id,
+            initialImageUrl: recipe.imageUrl,
+            cornerRadius: 8
+        )
         .frame(height: 150)
-        .clipped()
-        .cornerRadius(8)
-    }
-
-    private var placeholderImage: some View {
-        Rectangle()
-            .fill(Color.brandGreenLight)
-            .overlay {
-                Image(systemName: "fork.knife")
-                    .font(.title)
-                    .foregroundColor(.brandGreen)
-            }
     }
 }
 

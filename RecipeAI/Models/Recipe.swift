@@ -98,6 +98,18 @@ struct SingleRecipeResponse: Codable {
     }
 }
 
+// MARK: - Async Image Polling
+
+struct RecipeImagesResponse: Codable {
+    let success: Bool
+    let images: [RecipeImageItem]?
+}
+
+struct RecipeImageItem: Codable {
+    let id: String
+    let imageUrl: String?
+}
+
 // MARK: - Recipe Difficulty
 
 enum RecipeDifficulty: String, CaseIterable {

@@ -23,6 +23,7 @@ enum APIEndpoint {
     case generateSingleRecipe
     case generateByText
     case calculateCalories
+    case getRecipeImages(ids: [String])
 
     // MARK: - User Profile
 
@@ -86,6 +87,8 @@ enum APIEndpoint {
             return "/api/v1/recipe/generateByText"
         case .calculateCalories:
             return "/api/v1/recipe/calculateCalories"
+        case .getRecipeImages:
+            return "/api/v1/recipe/images"
 
         // Profile
         case .getProfile(let userId), .updateProfile(let userId):
@@ -147,7 +150,12 @@ enum APIEndpoint {
     }
 
     var queryItems: [URLQueryItem]? {
-        return nil
+        switch self {
+        case .getRecipeImages(let ids):
+            return [URLQueryItem(name: "ids", value: ids.joined(separator: ","))]
+        default:
+            return nil
+        }
     }
 
     var url: URL {

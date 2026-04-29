@@ -9,6 +9,13 @@ extension Color {
     /// Dark brand green - #008557
     static let brandGreenDark = Color(hex: "008557")
 
+    // MARK: - Recipe Image Placeholder
+
+    /// Cool mint white — top of the placeholder gradient
+    static let placeholderBgTop = Color(hex: "F4FAF7")
+    /// Brand-green light — bottom of the placeholder gradient (matches `brandGreenLight`)
+    static let placeholderBgBottom = Color(hex: "E2EFDD")
+
     // MARK: - Status Colors
 
     /// Success green - #4CAF50
