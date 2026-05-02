@@ -22,47 +22,73 @@ struct RecipeImageView: View {
         return nil
     }
 
-    var body: some View {
-        ZStack {
-            // Mint gradient base — always present so transitions to a real
-            // image are seamless.
-            LinearGradient(
-                colors: [Color.placeholderBgTop, Color.placeholderBgBottom],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+    /// Pre-fill from the session cache on init so the view doesn't flash the
+    /// placeholder on appearance if another view has already resolved this id.
+    init(recipeId: String, initialImageUrl: String?, cornerRadius: CGFloat) {
+        self.recipeId = recipeId
+        self.initialImageUrl = initialImageUrl
+        self.cornerRadius = cornerRadius
+        let preloaded = (initialImageUrl?.isEmpty == false ? initialImageUrl : nil)
+            ?? RecipeImageCache.shared.url(for: recipeId)
+        _resolvedImageUrl = State(initialValue: preloaded)
+    }
 
-            if let urlStr = displayUrl, let url = URL(string: urlStr) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        CookingSteamLoaderView()
-                    }
-                }
-            } else {
-                CookingSteamLoaderView()
+    var body: some View {
+        // `AsyncImage` measures itself by its loaded photo's intrinsic pixel
+        // size. Even with explicit `.frame()` modifiers, that intrinsic size
+        // can leak upward and break sibling layout the moment a real image
+        // arrives. The fix is the `Color.clear` + `.background(AsyncImage)`
+        // idiom: a transparent layout-driving view holds the slot at the
+        // caller-imposed frame, the photo renders behind it, and `.clipped()`
+        // crops anything that overflows.
+        Color.clear
+            .overlay {
+                LinearGradient(
+                    colors: [Color.placeholderBgTop, Color.placeholderBgBottom],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
             }
-        }
-        .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-        .task(id: recipeId + (initialImageUrl ?? "")) {
-            await pollIfNeeded()
-        }
+            .overlay {
+                if let urlStr = displayUrl, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        default:
+                            CookingSteamLoaderView()
+                        }
+                    }
+                } else {
+                    CookingSteamLoaderView()
+                }
+            }
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .task(id: recipeId + (initialImageUrl ?? "")) {
+                await pollIfNeeded()
+            }
     }
 
     // MARK: - Polling
 
     private func pollIfNeeded() async {
-        // Already have an image — nothing to do.
+        // The recipe came pre-resolved — record it so other views skip polling.
         if let url = initialImageUrl, !url.isEmpty {
+            RecipeImageCache.shared.store(url, for: recipeId)
             resolvedImageUrl = url
             return
         }
-        // Reset any stale resolved URL from a previous recipe.
+
+        // Another view resolved this id during the session — use it immediately.
+        if let cached = RecipeImageCache.shared.url(for: recipeId), !cached.isEmpty {
+            resolvedImageUrl = cached
+            return
+        }
+
+        // No URL yet — show the placeholder + animation and poll for it.
         resolvedImageUrl = nil
 
         let maxAttempts = 4
@@ -78,6 +104,7 @@ struct RecipeImageView: View {
                 if let match = response.images?.first(where: { $0.id == recipeId }),
                    let url = match.imageUrl,
                    !url.isEmpty {
+                    RecipeImageCache.shared.store(url, for: recipeId)
                     resolvedImageUrl = url
                     return
                 }

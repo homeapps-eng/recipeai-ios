@@ -25,12 +25,17 @@ struct RecipeCardView: View {
     let recipe: Recipe
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Recipe Image
-            recipeImage
+        // Match Android `item_recipe.xml`: 80×80 thumbnail on the left, name /
+        // description / meta row on the right.
+        HStack(alignment: .top, spacing: 16) {
+            RecipeImageView(
+                recipeId: recipe.id,
+                initialImageUrl: recipe.imageUrl,
+                cornerRadius: 8
+            )
+            .frame(width: 80, height: 80)
 
-            // Recipe Info
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(recipe.name)
                     .font(.appHeadline)
                     .foregroundColor(.textPrimary)
@@ -41,27 +46,21 @@ struct RecipeCardView: View {
                     .foregroundColor(.textSecondary)
                     .lineLimit(2)
 
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     Label(recipe.cookingTime, systemImage: "clock")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     Label(recipe.difficulty, systemImage: "chart.bar")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 .font(.appCaption1)
-                .foregroundColor(.textSecondary)
+                .foregroundColor(.brandGreen)
+                .padding(.top, 4)
             }
-            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .cardStyle()
-    }
-
-    private var recipeImage: some View {
-        // Unified placeholder + bubble animation + auto-polling for the
-        // AI-generated image. Same treatment as Home / Detail.
-        RecipeImageView(
-            recipeId: recipe.id,
-            initialImageUrl: recipe.imageUrl,
-            cornerRadius: 8
-        )
-        .frame(height: 150)
     }
 }
 

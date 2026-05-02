@@ -178,8 +178,14 @@ struct HomeView: View {
 
                         HStack(spacing: 16) {
                             Label(recipe.cookingTime, systemImage: "clock")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                             Label(recipe.servings + " servings", systemImage: "person.2")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                             Label(recipe.difficulty, systemImage: "chart.bar")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
                         .font(.appCaption1)
                         .foregroundColor(.textSecondary)
