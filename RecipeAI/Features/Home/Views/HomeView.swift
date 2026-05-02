@@ -152,35 +152,13 @@ struct HomeView: View {
         VStack(spacing: 12) {
             NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Recipe Image
-                    if let imageUrl = recipe.imageUrl, let url = URL(string: imageUrl) {
-                        AsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Rectangle()
-                                .fill(Color.brandGreenLight)
-                                .overlay {
-                                    Image(systemName: "photo")
-                                        .font(.largeTitle)
-                                        .foregroundColor(.brandGreen)
-                                }
-                        }
-                        .frame(height: 200)
-                        .clipped()
-                        .cornerRadius(12)
-                    } else {
-                        Rectangle()
-                            .fill(Color.brandGreenLight)
-                            .frame(height: 200)
-                            .overlay {
-                                Image(systemName: "fork.knife")
-                                    .font(.system(size: 50))
-                                    .foregroundColor(.brandGreen)
-                            }
-                            .cornerRadius(12)
-                    }
+                    // Recipe Image — unified placeholder + animation + auto-polling
+                    RecipeImageView(
+                        recipeId: recipe.id,
+                        initialImageUrl: recipe.imageUrl,
+                        cornerRadius: 12
+                    )
+                    .frame(height: 200)
 
                     // Recipe Info
                     VStack(alignment: .leading, spacing: 8) {
@@ -200,8 +178,14 @@ struct HomeView: View {
 
                         HStack(spacing: 16) {
                             Label(recipe.cookingTime, systemImage: "clock")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                             Label(recipe.servings + " servings", systemImage: "person.2")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                             Label(recipe.difficulty, systemImage: "chart.bar")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
                         .font(.appCaption1)
                         .foregroundColor(.textSecondary)

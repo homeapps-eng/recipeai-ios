@@ -13,28 +13,37 @@ struct RecipeDetailView: View {
     }
 
     var body: some View {
+        // Layout mirrors Android `activity_recipe.xml`: 16pt outer padding,
+        // image (250pt) → title → meta row → divider → description →
+        // ingredients section → instructions section.
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Recipe Image
+            VStack(alignment: .leading, spacing: 16) {
                 recipeImage
 
-                // Recipe Info
-                recipeInfo
+                Text(recipe.name)
+                    .font(.appTitle2)
+                    .foregroundColor(.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                // Meta Info
                 metaInfo
 
-                // Ingredients
+                Divider()
+                    .padding(.vertical, 8)
+
+                Text(recipe.fullDescription)
+                    .font(.appBody)
+                    .foregroundColor(.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 if let ingredients = recipe.ingredients, !ingredients.isEmpty {
                     ingredientsSection(ingredients)
                 }
 
-                // Instructions
                 if let instructions = recipe.instructions, !instructions.isEmpty {
                     instructionsSection(instructions)
                 }
             }
-            .padding(.bottom, 20)
+            .padding(16)
         }
         .scrollIndicators(.hidden)
         .navigationTitle(recipe.name)
@@ -66,67 +75,24 @@ struct RecipeDetailView: View {
     // MARK: - Recipe Image
 
     private var recipeImage: some View {
-        GeometryReader { geometry in
-            Group {
-                if let imageUrl = recipe.imageUrl, let url = URL(string: imageUrl) {
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        placeholderImage
-                    }
-                } else if let path = recipe.capturedImagePath,
-                          let uiImage = UIImage(contentsOfFile: path) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    placeholderImage
-                }
-            }
-            .frame(width: geometry.size.width, height: 250)
-            .clipped()
-        }
+        RecipeImageView(
+            recipeId: recipe.id,
+            initialImageUrl: recipe.imageUrl,
+            cornerRadius: 12
+        )
+        .frame(maxWidth: .infinity)
         .frame(height: 250)
-    }
-
-    private var placeholderImage: some View {
-        Rectangle()
-            .fill(Color.brandGreenLight)
-            .overlay {
-                Image(systemName: "fork.knife")
-                    .font(.system(size: 60))
-                    .foregroundColor(.brandGreen)
-            }
-    }
-
-    // MARK: - Recipe Info
-
-    private var recipeInfo: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(recipe.name)
-                .font(.appTitle2)
-                .foregroundColor(.textPrimary)
-
-            Text(recipe.fullDescription)
-                .font(.appBody)
-                .foregroundColor(.textSecondary)
-        }
-        .padding(.horizontal)
     }
 
     // MARK: - Meta Info
 
     private var metaInfo: some View {
-        HStack(spacing: 16) {
-            metaItem(icon: "clock", title: "Time", value: recipe.cookingTime)
+        HStack(spacing: 8) {
+            metaItem(icon: "clock", title: "Cook Time", value: recipe.cookingTime)
             metaItem(icon: "person.2", title: "Servings", value: recipe.servings)
-            metaItem(icon: "chart.bar", title: "Difficulty", value: recipe.difficulty)
+            metaItem(icon: "chart.bar", title: "Chef Level", value: recipe.difficulty)
         }
-        .padding()
         .frame(maxWidth: .infinity)
-        .background(Color.backgroundSecondary)
     }
 
     private func metaItem(icon: String, title: String, value: String) -> some View {
@@ -153,10 +119,7 @@ struct RecipeDetailView: View {
 
     private func ingredientsSection(_ ingredients: [String]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Ingredients")
-                .font(.appTitle3)
-                .foregroundColor(.textPrimary)
-                .padding(.horizontal)
+            sectionHeader("Ingredients")
 
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(ingredients, id: \.self) { ingredient in
@@ -170,14 +133,28 @@ struct RecipeDetailView: View {
                             .font(.appBody)
                             .foregroundColor(.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
+
+                        Spacer(minLength: 0)
                     }
                 }
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.backgroundSecondary)
-            .cornerRadius(12)
-            .padding(.horizontal)
+            .cornerRadius(16)
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        // Match Android: 4dp green vertical bar + section title.
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.brandGreen)
+                .frame(width: 4, height: 24)
+
+            Text(title)
+                .font(.appTitle3)
+                .foregroundColor(.textPrimary)
         }
     }
 
@@ -185,10 +162,7 @@ struct RecipeDetailView: View {
 
     private func instructionsSection(_ instructions: [String]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Instructions")
-                .font(.appTitle3)
-                .foregroundColor(.textPrimary)
-                .padding(.horizontal)
+            sectionHeader("Instructions")
 
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(Array(instructions.enumerated()), id: \.offset) { index, instruction in
@@ -204,16 +178,17 @@ struct RecipeDetailView: View {
                             .font(.appBody)
                             .foregroundColor(.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
+
+                        Spacer(minLength: 0)
                     }
                 }
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.backgroundSecondary)
-            .cornerRadius(12)
-            .padding(.horizontal)
+            .cornerRadius(16)
         }
-        .padding(.bottom, 32)
+        .padding(.bottom, 16)
     }
 
     // MARK: - Actions

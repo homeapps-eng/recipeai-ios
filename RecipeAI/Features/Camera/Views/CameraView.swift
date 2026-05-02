@@ -88,7 +88,11 @@ struct CameraView: View {
                 }
             }
             .aiLoadingOverlay(
-                isLoading: viewModel.isLoading,
+                // Both calorie + recipe flows use the inline CalorieScanLoaderView
+                // overlaid on the captured photo (see `imagePreview`). The full-
+                // screen modal only kicks in when there's no photo to scan over
+                // (shouldn't happen on this screen, but kept as a fallback).
+                isLoading: viewModel.isLoading && viewModel.capturedImage == nil,
                 mode: viewModel.loadingMode,
                 image: viewModel.capturedImage
             )
@@ -135,10 +139,39 @@ struct CameraView: View {
     // MARK: - Image Preview
 
     private func imagePreview(_ image: UIImage) -> some View {
-        Image(uiImage: image)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .ignoresSafeArea()
+        // Match Android: photo sits inside the safe-area, scan animation is
+        // bound to the photo's rendered frame (not the whole screen) so the
+        // scan-line / nodes stay on top of the food, not the letterbox bars.
+        GeometryReader { proxy in
+            let imageSize = aspectFitSize(for: image.size, in: proxy.size)
+            ZStack {
+                Color.black
+
+                ZStack {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: imageSize.width, height: imageSize.height)
+                        .clipped()
+
+                    if viewModel.isLoading {
+                        CalorieScanLoaderView()
+                            .frame(width: imageSize.width, height: imageSize.height)
+                    }
+                }
+                .frame(width: imageSize.width, height: imageSize.height)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+    }
+
+    private func aspectFitSize(for imageSize: CGSize, in container: CGSize) -> CGSize {
+        guard imageSize.width > 0, imageSize.height > 0,
+              container.width > 0, container.height > 0 else {
+            return container
+        }
+        let scale = min(container.width / imageSize.width, container.height / imageSize.height)
+        return CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
     }
 
     // MARK: - Controls Overlay
