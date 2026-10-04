@@ -2,45 +2,30 @@ import SwiftUI
 
 /// Unified recipe image view used by Home / Recipes list / Recipe detail.
 ///
-/// While `initialImageUrl` is empty/nil, shows the cool-mint placeholder
-/// gradient with the `CookingSteamLoaderView` animation overlay, and polls
-/// `/api/v1/recipe/images?ids=<id>` every 5s (up to 4 attempts) to pick up
-/// the AI image as soon as the backend writes it.
+/// While the recipe has no image URL yet, shows the cool-mint placeholder
+/// gradient with the `CookingSteamLoaderView` animation overlay and asks
+/// `RecipeImageResolver` to pick up the AI image as soon as the backend
+/// writes it.
 ///
-/// When an image URL is available (either initially or via polling), loads
-/// it through `AsyncImage`.
+/// When an image URL is available (either initially or via the resolver),
+/// loads it through `RemoteImage`. If the image never arrives or fails to
+/// download, the animation is replaced by a static placeholder.
 struct RecipeImageView: View {
     let recipeId: String
     let initialImageUrl: String?
     let cornerRadius: CGFloat
 
-    @State private var resolvedImageUrl: String?
+    @ObservedObject private var resolver = RecipeImageResolver.shared
 
     private var displayUrl: String? {
-        if let resolved = resolvedImageUrl, !resolved.isEmpty { return resolved }
         if let initial = initialImageUrl, !initial.isEmpty { return initial }
-        return nil
-    }
-
-    /// Pre-fill from the session cache on init so the view doesn't flash the
-    /// placeholder on appearance if another view has already resolved this id.
-    init(recipeId: String, initialImageUrl: String?, cornerRadius: CGFloat) {
-        self.recipeId = recipeId
-        self.initialImageUrl = initialImageUrl
-        self.cornerRadius = cornerRadius
-        let preloaded = (initialImageUrl?.isEmpty == false ? initialImageUrl : nil)
-            ?? RecipeImageCache.shared.url(for: recipeId)
-        _resolvedImageUrl = State(initialValue: preloaded)
+        return resolver.urls[recipeId]
     }
 
     var body: some View {
-        // `AsyncImage` measures itself by its loaded photo's intrinsic pixel
-        // size. Even with explicit `.frame()` modifiers, that intrinsic size
-        // can leak upward and break sibling layout the moment a real image
-        // arrives. The fix is the `Color.clear` + `.background(AsyncImage)`
-        // idiom: a transparent layout-driving view holds the slot at the
-        // caller-imposed frame, the photo renders behind it, and `.clipped()`
-        // crops anything that overflows.
+        // The image must never drive layout: a transparent view holds the slot
+        // at the caller-imposed frame, the photo renders on top of it, and
+        // `.clipped()` crops anything that overflows.
         Color.clear
             .overlay {
                 LinearGradient(
@@ -51,16 +36,20 @@ struct RecipeImageView: View {
             }
             .overlay {
                 if let urlStr = displayUrl, let url = URL(string: urlStr) {
-                    AsyncImage(url: url) { phase in
+                    RemoteImage(url: url) { phase in
                         switch phase {
                         case .success(let image):
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
+                        case .failure:
+                            unavailablePlaceholder
                         default:
                             CookingSteamLoaderView()
                         }
                     }
+                } else if resolver.unresolved.contains(recipeId) {
+                    unavailablePlaceholder
                 } else {
                     CookingSteamLoaderView()
                 }
@@ -68,50 +57,15 @@ struct RecipeImageView: View {
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .task(id: recipeId + (initialImageUrl ?? "")) {
-                await pollIfNeeded()
+                if displayUrl == nil {
+                    resolver.resolve(recipeId)
+                }
             }
     }
 
-    // MARK: - Polling
-
-    private func pollIfNeeded() async {
-        // The recipe came pre-resolved — record it so other views skip polling.
-        if let url = initialImageUrl, !url.isEmpty {
-            RecipeImageCache.shared.store(url, for: recipeId)
-            resolvedImageUrl = url
-            return
-        }
-
-        // Another view resolved this id during the session — use it immediately.
-        if let cached = RecipeImageCache.shared.url(for: recipeId), !cached.isEmpty {
-            resolvedImageUrl = cached
-            return
-        }
-
-        // No URL yet — show the placeholder + animation and poll for it.
-        resolvedImageUrl = nil
-
-        let maxAttempts = 4
-        let intervalNs: UInt64 = 5_000_000_000
-        for _ in 0..<maxAttempts {
-            try? await Task.sleep(nanoseconds: intervalNs)
-            if Task.isCancelled { return }
-
-            do {
-                let response: RecipeImagesResponse = try await NetworkManager.shared.get(
-                    endpoint: .getRecipeImages(ids: [recipeId])
-                )
-                if let match = response.images?.first(where: { $0.id == recipeId }),
-                   let url = match.imageUrl,
-                   !url.isEmpty {
-                    RecipeImageCache.shared.store(url, for: recipeId)
-                    resolvedImageUrl = url
-                    return
-                }
-            } catch {
-                // Silent retry on next iteration. The placeholder + animation
-                // continue showing meanwhile.
-            }
-        }
+    private var unavailablePlaceholder: some View {
+        Image(systemName: "fork.knife")
+            .font(.title2)
+            .foregroundColor(.brandGreen)
     }
 }
