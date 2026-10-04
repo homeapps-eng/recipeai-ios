@@ -1,4 +1,5 @@
 import Foundation
+import FirebaseAuth
 
 actor NetworkManager {
     static let shared = NetworkManager()
@@ -27,7 +28,7 @@ actor NetworkManager {
         endpoint: APIEndpoint,
         body: Encodable? = nil
     ) async throws -> T {
-        var request = endpoint.urlRequest(authToken: getAuthToken())
+        var request = endpoint.urlRequest(authToken: await authToken())
 
         if let body = body {
             do {
@@ -48,7 +49,7 @@ actor NetworkManager {
         mimeType: String,
         fieldName: String = "image"
     ) async throws -> T {
-        var request = endpoint.urlRequest(authToken: getAuthToken())
+        var request = endpoint.urlRequest(authToken: await authToken())
 
         let boundary = UUID().uuidString
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -70,7 +71,7 @@ actor NetworkManager {
         endpoint: APIEndpoint,
         formData: [String: String]
     ) async throws -> T {
-        var request = endpoint.urlRequest(authToken: getAuthToken())
+        var request = endpoint.urlRequest(authToken: await authToken())
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
         // Use custom character set that excludes + and / (they must be encoded for form data)
@@ -87,6 +88,20 @@ actor NetworkManager {
     // MARK: - Private Methods
 
     private func performRequest<T: Decodable>(_ request: URLRequest) async throws -> T {
+        do {
+            return try await send(request)
+        } catch NetworkError.unauthorized {
+            // The gateway rejected the token. Force a refresh and retry once.
+            guard let token = await freshToken(forcingRefresh: true) else {
+                throw NetworkError.unauthorized
+            }
+            var retry = request
+            retry.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            return try await send(retry)
+        }
+    }
+
+    private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
         do {
             let (data, response) = try await session.data(for: request)
 
@@ -132,8 +147,18 @@ actor NetworkManager {
         }
     }
 
-    private nonisolated func getAuthToken() -> String? {
-        KeychainManager.shared.getActiveToken()
+    /// Firebase ID tokens expire after an hour. Firebase caches the current one
+    /// and refreshes it shortly before expiry, so ask it on every request
+    /// instead of reusing the copy saved at sign-in.
+    private func freshToken(forcingRefresh: Bool = false) async -> String? {
+        try? await Auth.auth().currentUser?.getIDToken(forcingRefresh: forcingRefresh)
+    }
+
+    private func authToken() async -> String? {
+        if let token = await freshToken() {
+            return token
+        }
+        return await KeychainManager.shared.getActiveToken()
     }
 
     private func parseErrorMessage(from data: Data) -> String? {

@@ -21,7 +21,9 @@ final class CameraViewModel: NSObject, ObservableObject {
 
     let captureSession = AVCaptureSession()
     private var photoOutput = AVCapturePhotoOutput()
-    private var capturedImagePath: String?
+    private let sessionQueue = DispatchQueue(label: "com.homeapps.recipeai.camera-session")
+    /// The capture as a 512px JPEG, base64-encoded, ready to send to the API.
+    private var uploadImageBase64: String?
     private let adManager = AdManager.shared
     private let usageTracker = RecipeUsageTracker.shared
     private var pendingAction: PendingCameraAction?
@@ -29,6 +31,7 @@ final class CameraViewModel: NSObject, ObservableObject {
     override init() {
         super.init()
         setupCaptureSession()
+        Self.removeLegacyCaptures()
     }
 
     // MARK: - Camera Permission
@@ -83,11 +86,11 @@ final class CameraViewModel: NSObject, ObservableObject {
 
     func retakePhoto() {
         capturedImage = nil
-        capturedImagePath = nil
+        uploadImageBase64 = nil
 
         // Restart capture session
         let session = captureSession
-        DispatchQueue.global(qos: .userInitiated).async {
+        sessionQueue.async {
             session.startRunning()
         }
     }
@@ -95,7 +98,7 @@ final class CameraViewModel: NSObject, ObservableObject {
     // MARK: - Generate Recipes
 
     func generateRecipes() async -> [Recipe] {
-        guard let image = capturedImage else { return [] }
+        guard let base64Image = uploadImageBase64 else { return [] }
 
         // Check usage limits
         guard usageTracker.canGenerateRecipe else {
@@ -108,11 +111,6 @@ final class CameraViewModel: NSObject, ObservableObject {
         isLoading = true
 
         do {
-            // Convert image to base64
-            guard let base64Image = imageToBase64(image) else {
-                throw RecipeError.generationFailed("Failed to process image")
-            }
-
             // Make API request
             let formData = [
                 "image": base64Image,
@@ -124,11 +122,7 @@ final class CameraViewModel: NSObject, ObservableObject {
             )
 
             if response.success, let recipes = response.recipes {
-                let recipeList = recipes.map { generated -> Recipe in
-                    var recipe = generated.recipe
-                    recipe.capturedImagePath = capturedImagePath
-                    return recipe
-                }
+                let recipeList = recipes.map { $0.recipe }
 
                 // Increment usage
                 usageTracker.incrementRecipeCount(by: recipeList.count)
@@ -150,7 +144,7 @@ final class CameraViewModel: NSObject, ObservableObject {
     // MARK: - Calculate Calories
 
     func calculateCalories() async -> CaloriesResponse? {
-        guard let image = capturedImage else { return nil }
+        guard let base64Image = uploadImageBase64 else { return nil }
 
         // Check usage limits
         guard usageTracker.canCalculateCalories else {
@@ -163,11 +157,6 @@ final class CameraViewModel: NSObject, ObservableObject {
         isLoading = true
 
         do {
-            // Convert image to base64
-            guard let base64Image = imageToBase64(image) else {
-                throw RecipeError.caloriesCalculationFailed("Failed to process image")
-            }
-
             // Make API request
             let formData = [
                 "image": base64Image,
@@ -243,35 +232,27 @@ final class CameraViewModel: NSObject, ObservableObject {
 
     // MARK: - Image Processing
 
-    private func imageToBase64(_ image: UIImage) -> String? {
-        // Fix orientation
-        let fixedImage = image.fixedOrientation()
-
-        // Resize image to max 512px for Gemini API
-        let resizedImage = fixedImage.resizedForAPI(maxDimension: 512)
-
-        // Compress with lower quality to reduce size
-        guard let imageData = resizedImage.jpegData(compressionQuality: 0.6) else {
-            return nil
+    private func didCapture(preview: UIImage, uploadImageBase64: String) {
+        // Stop capture session
+        let session = captureSession
+        sessionQueue.async {
+            session.stopRunning()
         }
 
-        return imageData.base64EncodedString()
+        self.uploadImageBase64 = uploadImageBase64
+        capturedImage = preview
     }
 
-    private func saveImageLocally(_ image: UIImage) -> String? {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let filename = "captured_\(UUID().uuidString).jpg"
-        let filePath = documentsPath.appendingPathComponent(filename)
-
-        guard let data = image.jpegData(compressionQuality: 0.8) else {
-            return nil
-        }
-
-        do {
-            try data.write(to: filePath)
-            return filePath.path
-        } catch {
-            return nil
+    /// Earlier versions saved every capture to Documents and never read or
+    /// deleted it. Remove what they left behind.
+    private nonisolated static func removeLegacyCaptures() {
+        Task.detached(priority: .utility) {
+            let fileManager = FileManager.default
+            let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let files = (try? fileManager.contentsOfDirectory(at: documents, includingPropertiesForKeys: nil)) ?? []
+            for file in files where file.lastPathComponent.hasPrefix("captured_") && file.pathExtension == "jpg" {
+                try? fileManager.removeItem(at: file)
+            }
         }
     }
 }
@@ -288,20 +269,21 @@ extension CameraViewModel: AVCapturePhotoCaptureDelegate {
             return
         }
 
-        guard let imageData = photo.fileDataRepresentation(),
-              let image = UIImage(data: imageData) else {
+        guard let imageData = photo.fileDataRepresentation() else {
             return
         }
 
-        Task { @MainActor in
-            // Stop capture session
-            captureSession.stopRunning()
+        // Decode off the main thread, and only at the sizes actually used:
+        // screen size for the preview and 512px for the Gemini API. Both have
+        // the EXIF orientation applied.
+        Task.detached(priority: .userInitiated) {
+            guard let preview = ImageDownsampler.image(from: imageData, maxPixelSize: 2048),
+                  let upload = ImageDownsampler.image(from: imageData, maxPixelSize: 512)?
+                    .jpegData(compressionQuality: 0.6) else {
+                return
+            }
 
-            // Save image locally
-            capturedImagePath = saveImageLocally(image)
-
-            // Update captured image
-            capturedImage = image
+            await self.didCapture(preview: preview, uploadImageBase64: upload.base64EncodedString())
         }
     }
 }
@@ -309,19 +291,6 @@ extension CameraViewModel: AVCapturePhotoCaptureDelegate {
 // MARK: - UIImage Extension
 
 extension UIImage {
-    func fixedOrientation() -> UIImage {
-        if imageOrientation == .up {
-            return self
-        }
-
-        UIGraphicsBeginImageContextWithOptions(size, false, scale)
-        draw(in: CGRect(origin: .zero, size: size))
-        let normalizedImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-
-        return normalizedImage ?? self
-    }
-
     func resizedForAPI(maxDimension: CGFloat) -> UIImage {
         let currentMax = max(size.width, size.height)
         guard currentMax > maxDimension else { return self }

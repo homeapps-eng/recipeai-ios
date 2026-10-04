@@ -22,13 +22,23 @@ final class HomeViewModel: ObservableObject {
         // Prevent duplicate loads (but allow if forcing refresh)
         guard !isLoading || forceRefresh else { return }
 
+        let language = UserDefaultsManager.shared.selectedLanguage.rawValue
+
+        // Today's recipe was already generated — show it without another AI call.
+        if !forceRefresh, let cached = DailyRecipeCache.load(language: language) {
+            dailyRecipe = cached
+            return
+        }
+
         // Pre-load ad in background for when user needs it
         Task {
             await adManager.loadRewardedAd()
         }
 
-        // Check if user can load home recipe
-        guard usageTracker.canLoadHomeRecipe else {
+        // The first recipe of the day is free. Only asking for a different one
+        // counts against the free limit.
+        let isReplacing = dailyRecipe != nil
+        guard !isReplacing || usageTracker.canLoadHomeRecipe else {
             pendingForceRefresh = forceRefresh
             showAdPrompt = true
             return
@@ -49,7 +59,7 @@ final class HomeViewModel: ObservableObject {
             if let cuisines = preferences.cuisines, !cuisines.isEmpty {
                 formData["cuisine"] = cuisines.randomElement() ?? ""
             }
-            formData["language"] = UserDefaultsManager.shared.selectedLanguage.rawValue
+            formData["language"] = language
 
             let response: SingleRecipeResponse = try await NetworkManager.shared.requestFormEncoded(
                 endpoint: .generateSingleRecipe,
@@ -58,7 +68,10 @@ final class HomeViewModel: ObservableObject {
 
             if response.success, let recipe = response.recipe {
                 dailyRecipe = recipe
-                usageTracker.incrementHomeRecipeLoads()
+                DailyRecipeCache.save(recipe, language: language)
+                if isReplacing {
+                    usageTracker.incrementHomeRecipeLoads()
+                }
                 error = nil
             } else {
                 let errorMsg = response.message ?? "Unable to generate recipe"
@@ -129,6 +142,30 @@ final class HomeViewModel: ObservableObject {
         showAdPrompt = false
         pendingForceRefresh = false
         error = RecipeError.generationFailed("Daily limit reached. Upgrade to Premium for unlimited recipes!")
+    }
+}
+
+/// Today's home recipe, kept so a cold launch shows it without another AI call.
+private struct DailyRecipeCache: Codable {
+    let recipe: Recipe
+    let language: String
+    let savedAt: Date
+
+    private static let key = "daily_recipe_cache"
+
+    static func load(language: String) -> Recipe? {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let cached = try? JSONDecoder().decode(DailyRecipeCache.self, from: data),
+              cached.language == language,
+              Calendar.current.isDateInToday(cached.savedAt) else {
+            return nil
+        }
+        return cached.recipe
+    }
+
+    static func save(_ recipe: Recipe, language: String) {
+        let cached = DailyRecipeCache(recipe: recipe, language: language, savedAt: Date())
+        UserDefaults.standard.set(try? JSONEncoder().encode(cached), forKey: key)
     }
 }
 

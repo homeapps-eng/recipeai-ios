@@ -175,12 +175,14 @@ struct FavoritesView: View {
             // Thumbnail
             Group {
                 if let imageUrl = recipe.imageUrl, let url = URL(string: imageUrl) {
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color.brandGreenLight
+                    RemoteImage(url: url) { phase in
+                        if case .success(let image) = phase {
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } else {
+                            Color.brandGreenLight
+                        }
                     }
                 } else {
                     Color.brandGreenLight
