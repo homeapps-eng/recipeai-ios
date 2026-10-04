@@ -7,7 +7,6 @@ target 'RecipeAI' do
   pod 'FirebaseCore'
   pod 'FirebaseAnalytics'
   pod 'FirebaseAuth'
-  pod 'FirebaseFirestore'
   pod 'GoogleSignIn'
   pod 'Google-Mobile-Ads-SDK'
 
