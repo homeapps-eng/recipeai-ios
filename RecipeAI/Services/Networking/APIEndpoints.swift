@@ -16,6 +16,7 @@ enum APIEndpoint {
     case verifyToken
     case guestRegister
     case guestConvert
+    case deleteAccount
 
     // MARK: - Recipe
 
@@ -30,7 +31,6 @@ enum APIEndpoint {
     case getProfile(userId: String)
     case updateProfile(userId: String)
     case uploadAvatar(userId: String)
-    case deleteUser(userId: String)
 
     // MARK: - Favorites
 
@@ -77,6 +77,8 @@ enum APIEndpoint {
             return "/api/v1/auth/guest/register"
         case .guestConvert:
             return "/api/v1/auth/guest/convert"
+        case .deleteAccount:
+            return "/api/v1/auth/account"
 
         // Recipe
         case .generateRecipes:
@@ -95,8 +97,6 @@ enum APIEndpoint {
             return "/api/v1/users/\(userId)/profile"
         case .uploadAvatar(let userId):
             return "/api/v1/users/\(userId)/avatar"
-        case .deleteUser(let userId):
-            return "/api/v1/users/\(userId)/complete"
 
         // Favorites
         case .getFavorites(let userId), .addFavorite(let userId):
@@ -140,7 +140,7 @@ enum APIEndpoint {
             return "PUT"
 
         // DELETE methods
-        case .removeFavorite, .deleteUser:
+        case .removeFavorite, .deleteAccount:
             return "DELETE"
 
         // GET methods
