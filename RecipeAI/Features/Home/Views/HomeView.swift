@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HomeView: View {
+    @EnvironmentObject private var userDefaults: UserDefaultsManager
     @StateObject private var viewModel = HomeViewModel()
     @State private var showCamera = false
     @State private var showVoice = false
@@ -52,6 +53,13 @@ struct HomeView: View {
                 }
             }
             .onAppear {
+                Task {
+                    await viewModel.loadIfNeeded()
+                }
+            }
+            // The first-launch language picker sits on top of this screen, so
+            // choosing a language there does not make the screen appear again.
+            .onChange(of: userDefaults.selectedLanguage) {
                 Task {
                     await viewModel.loadIfNeeded()
                 }
@@ -272,4 +280,5 @@ private struct RecipeGridCard: View {
 
 #Preview {
     HomeView()
+        .environmentObject(UserDefaultsManager.shared)
 }

@@ -17,6 +17,9 @@ final class HomeViewModel: ObservableObject {
 
     /// What the recipes on screen were chosen for. Nil until a page has loaded.
     private var loadedFilters: RecipeFeedFilters?
+    /// What the latest reload asked for. Differs from `loadedFilters` only
+    /// while that reload is on its way.
+    private var requestedFilters: RecipeFeedFilters?
     /// The server picks a seed for each new selection. Sending it back with an
     /// offset returns the next page of that same selection.
     private var seed = 0
@@ -40,7 +43,7 @@ final class HomeViewModel: ObservableObject {
     /// Loads the feed when there is none yet, or when the language or the
     /// food preferences have changed since it was loaded.
     func loadIfNeeded() async {
-        guard !isLoading, loadedFilters != .current else { return }
+        guard requestedFilters != .current else { return }
         await reload()
     }
 
@@ -82,6 +85,7 @@ final class HomeViewModel: ObservableObject {
 
     private func reload() async {
         let filters = RecipeFeedFilters.current
+        requestedFilters = filters
         reloads += 1
         let reload = reloads
 
@@ -101,6 +105,7 @@ final class HomeViewModel: ObservableObject {
         } catch {
             guard reload == reloads else { return }
             // The recipes already on screen stay there.
+            requestedFilters = loadedFilters
             self.error = error
             showRefreshError = !recipes.isEmpty
         }
