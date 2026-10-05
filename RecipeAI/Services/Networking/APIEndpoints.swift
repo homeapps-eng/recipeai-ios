@@ -21,10 +21,10 @@ enum APIEndpoint {
     // MARK: - Recipe
 
     case generateRecipes
-    case generateSingleRecipe
     case generateByText
     case calculateCalories
     case getRecipeImages(ids: [String])
+    case getRecipeFeed(filters: RecipeFeedFilters, seed: Int, offset: Int, limit: Int)
 
     // MARK: - User Profile
 
@@ -83,14 +83,14 @@ enum APIEndpoint {
         // Recipe
         case .generateRecipes:
             return "/api/v1/recipe/generateMultiple"
-        case .generateSingleRecipe:
-            return "/api/v1/recipe/generateSingle"
         case .generateByText:
             return "/api/v1/recipe/generateByText"
         case .calculateCalories:
             return "/api/v1/recipe/calculateCalories"
         case .getRecipeImages:
             return "/api/v1/recipe/images"
+        case .getRecipeFeed:
+            return "/api/v1/recipe/feed"
 
         // Profile
         case .getProfile(let userId), .updateProfile(let userId):
@@ -131,7 +131,7 @@ enum APIEndpoint {
         // POST methods
         case .signUp, .signIn, .googleSignIn, .appleSignIn, .verifyToken,
              .guestRegister, .guestConvert,
-             .generateRecipes, .generateSingleRecipe, .generateByText, .calculateCalories,
+             .generateRecipes, .generateByText, .calculateCalories,
              .uploadAvatar, .addFavorite, .verifyAppleSubscription, .submitSupport:
             return "POST"
 
@@ -153,6 +153,23 @@ enum APIEndpoint {
         switch self {
         case .getRecipeImages(let ids):
             return [URLQueryItem(name: "ids", value: ids.joined(separator: ","))]
+        case .getRecipeFeed(let filters, let seed, let offset, let limit):
+            var items = [
+                URLQueryItem(name: "language", value: filters.language),
+                URLQueryItem(name: "seed", value: String(seed)),
+                URLQueryItem(name: "offset", value: String(offset)),
+                URLQueryItem(name: "limit", value: String(limit))
+            ]
+            let lists = [
+                ("categories", filters.categories),
+                ("cuisine", filters.cuisines),
+                ("dietaryRestrictions", filters.dietaryRestrictions),
+                ("allergies", filters.allergies)
+            ]
+            for (name, values) in lists where !values.isEmpty {
+                items.append(URLQueryItem(name: name, value: values.joined(separator: ",")))
+            }
+            return items
         default:
             return nil
         }

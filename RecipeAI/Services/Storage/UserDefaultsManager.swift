@@ -40,7 +40,6 @@ final class UserDefaultsManager: ObservableObject {
         static let lastResetDate = "last_reset_date"
         static let dailyRecipeCount = "daily_recipe_count"
         static let dailyButtonPressCount = "daily_button_press_count"
-        static let totalHomeRecipeLoads = "total_home_recipe_loads"
 
         // Guest Mode
         static let isGuestUser = "is_guest_user"

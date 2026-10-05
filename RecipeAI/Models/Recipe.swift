@@ -85,16 +85,36 @@ struct GeneratedRecipe: Codable {
     let imageUrl: String?
 }
 
-// MARK: - Single Recipe Response (for daily recipe)
+// MARK: - Home Feed
 
-struct SingleRecipeResponse: Codable {
-    let recipes: [GeneratedRecipe]?
-    let success: Bool
-    let message: String?
+/// One page of the home feed. Sending `seed` and `nextOffset` back returns the
+/// page after it.
+struct RecipeFeedResponse: Codable {
+    let recipes: [Recipe]?
+    let seed: Int
+    let nextOffset: Int
+    let hasMore: Bool
+}
 
-    // Convenience property to get first recipe
-    var recipe: Recipe? {
-        recipes?.first?.recipe
+/// What the home feed is chosen for: the recipe language and the user's food
+/// preferences.
+struct RecipeFeedFilters: Equatable {
+    let language: String
+    let categories: [String]
+    let cuisines: [String]
+    let dietaryRestrictions: [String]
+    let allergies: [String]
+
+    static var current: RecipeFeedFilters {
+        let defaults = UserDefaultsManager.shared
+        // Sorted, so the same preferences always compare equal.
+        return RecipeFeedFilters(
+            language: defaults.selectedLanguage.rawValue,
+            categories: defaults.likedCategories.sorted(),
+            cuisines: defaults.selectedCuisines.sorted(),
+            dietaryRestrictions: defaults.dietaryRestrictions,
+            allergies: defaults.allergies
+        )
     }
 }
 
