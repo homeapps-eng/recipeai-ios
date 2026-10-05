@@ -146,10 +146,14 @@ struct VoiceView: View {
         }
         .padding(.vertical)
         .animation(.easeInOut(duration: 0.2), value: isEditingRequest)
-        // A tap outside the request box ends editing
-        .contentShape(Rectangle())
-        .onTapGesture {
-            isEditingRequest = false
+        // A tap on the empty space around the request box ends editing. It sits
+        // behind the content so that it cannot take taps meant for the box.
+        .background {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    isEditingRequest = false
+                }
         }
         .onChange(of: viewModel.transcribedText) { _, text in
             if !text.isEmpty {
