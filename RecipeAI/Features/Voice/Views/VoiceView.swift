@@ -101,7 +101,7 @@ struct VoiceView: View {
                     .onSubmit {
                         isEditingRequest = false
                     }
-                    .disabled(viewModel.isListening || viewModel.isGenerating)
+                    .disabled(viewModel.isGenerating)
                     .padding()
                     .frame(maxWidth: .infinity)
                     .background(Color.backgroundSecondary)
@@ -154,6 +154,14 @@ struct VoiceView: View {
                 .onTapGesture {
                     isEditingRequest = false
                 }
+        }
+        // The microphone stays on after the user stops speaking. Tapping the
+        // text means they want to correct it, so stop listening first:
+        // otherwise what is heard next would replace what they type.
+        .onChange(of: isEditingRequest) { _, isEditing in
+            if isEditing {
+                viewModel.stopListening()
+            }
         }
         .onChange(of: viewModel.transcribedText) { _, text in
             if !text.isEmpty {
