@@ -523,91 +523,62 @@ final class AuthManager: ObservableObject {
             if Auth.auth().currentUser != nil {
                 try Auth.auth().signOut()
             }
-            GIDSignIn.sharedInstance.signOut()
-
-            // Clear all tokens
-            KeychainManager.shared.clearToken()
-            KeychainManager.shared.clearGuestToken()
-            UserDefaultsManager.shared.clearAll()
-
-            // Post notification to clear all local data (favorites, usage tracker, etc.)
-            NotificationCenter.default.post(name: .userDidSignOut, object: nil)
-
-            // Reset state
-            guestUser = nil
-            currentUser = nil
-            authState = .unauthenticated
-            isAuthenticated = false
+            clearLocalSession()
         } catch {
             self.error = AuthError.from(error)
             throw self.error!
         }
     }
 
+    /// Removes everything this device keeps for the signed-in user and shows
+    /// the sign-in screen.
+    private func clearLocalSession() {
+        GIDSignIn.sharedInstance.signOut()
+
+        // Clear all tokens
+        KeychainManager.shared.clearToken()
+        KeychainManager.shared.clearGuestToken()
+        UserDefaultsManager.shared.clearAll()
+
+        // Post notification to clear all local data (favorites, usage tracker, etc.)
+        NotificationCenter.default.post(name: .userDidSignOut, object: nil)
+
+        // Reset state
+        guestUser = nil
+        currentUser = nil
+        authState = .unauthenticated
+        isAuthenticated = false
+    }
+
     // MARK: - Delete Account
 
+    /// Deletes the signed-in account, guest or registered. The server removes
+    /// the user's data and the Firebase account, so unlike deleting the
+    /// Firebase user from the app, this does not need a recent sign-in.
     func deleteAccount() async throws {
-        // Handle guest deletion
-        if let guest = guestUser {
-            isLoading = true
-            error = nil
-
-            do {
-                // Delete guest user data from backend
-                let _: DeleteUserResponse = try await NetworkManager.shared.delete(
-                    endpoint: .deleteUser(userId: guest.id)
-                )
-
-                // Clear local data
-                KeychainManager.shared.clearGuestToken()
-                UserDefaultsManager.shared.clearAll()
-
-                // Update auth state
-                guestUser = nil
-                authState = .unauthenticated
-                isAuthenticated = false
-                isLoading = false
-            } catch {
-                isLoading = false
-                self.error = AuthError.from(error)
-                throw self.error!
-            }
-            return
-        }
-
-        // Handle authenticated user deletion
-        guard let user = Auth.auth().currentUser else {
+        guard isAuthenticated else {
             throw AuthError.notAuthenticated
         }
 
-        let userId = user.uid
         isLoading = true
         error = nil
 
         do {
-            // 1. Delete user data from backend
-            let _: DeleteUserResponse = try await NetworkManager.shared.delete(
-                endpoint: .deleteUser(userId: userId)
-            )
-
-            // 2. Delete Firebase Auth user
-            try await user.delete()
-
-            // 3. Clear local data
-            KeychainManager.shared.clearToken()
-            UserDefaultsManager.shared.clearAll()
-            SubscriptionManager.shared.clear()
-
-            // 4. Update auth state to trigger UI change
-            currentUser = nil
-            authState = .unauthenticated
-            isAuthenticated = false
-            isLoading = false
+            let _: DeleteAccountResponse = try await NetworkManager.shared.delete(endpoint: .deleteAccount)
         } catch {
             isLoading = false
-            self.error = AuthError.from(error)
-            throw self.error!
+            let deletionError: AuthError = error.isNetworkUnavailable || error.isTimeoutError
+                ? .networkError
+                : .accountDeletionFailed
+            self.error = deletionError
+            throw deletionError
         }
+
+        // The account no longer exists, so this cannot be allowed to fail:
+        // drop the Firebase session without asking the server.
+        try? Auth.auth().signOut()
+        clearLocalSession()
+        isLoading = false
     }
 
     // MARK: - Token Management
@@ -656,6 +627,7 @@ enum AuthError: LocalizedError {
     case weakPassword
     case networkError
     case accountExistsWithDifferentProvider(providers: [String])
+    case accountDeletionFailed
     case unknown(String)
 
     var errorDescription: String? {
@@ -683,6 +655,8 @@ enum AuthError: LocalizedError {
         case .accountExistsWithDifferentProvider(let providers):
             let providerName = providers.first.map { formatProviderName($0) } ?? "another method"
             return "An account already exists with this email. Please sign in with \(providerName)."
+        case .accountDeletionFailed:
+            return "We couldn't delete your account. Please try again."
         case .unknown(let message):
             return message
         }

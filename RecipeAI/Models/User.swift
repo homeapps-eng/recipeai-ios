@@ -57,8 +57,8 @@ struct UpdateSettingsRequest: Codable {
     let measurementUnits: String
 }
 
-// MARK: - Delete User Response
+// MARK: - Delete Account Response
 
-struct DeleteUserResponse: Codable {
+struct DeleteAccountResponse: Codable {
     let message: String?
 }
