@@ -6,12 +6,11 @@ struct HomeView: View {
     @State private var showVoice = false
     @State private var showRecipes = false
     @State private var showCalories = false
-    @State private var showSubscription = false
     @State private var generatedRecipes: [Recipe] = []
     @State private var caloriesResponse: CaloriesResponse?
-    @State private var hasLoadedRecipe = false
-    @State private var showRefreshError = false
-    @State private var refreshErrorMessage = ""
+
+    // Two columns on a phone held upright, more where there is room for them.
+    private let columns = [GridItem(.adaptive(minimum: 160), spacing: 12)]
 
     var body: some View {
         NavigationStack {
@@ -53,10 +52,8 @@ struct HomeView: View {
                 }
             }
             .onAppear {
-                guard !hasLoadedRecipe else { return }
-                hasLoadedRecipe = true
                 Task {
-                    await viewModel.loadDailyRecipe()
+                    await viewModel.loadIfNeeded()
                 }
             }
         }
@@ -67,166 +64,93 @@ struct HomeView: View {
     private var mainContent: some View {
         ScrollView {
             VStack(spacing: 20) {
-                if viewModel.isLoading {
-                    loadingSection
-                } else if let recipe = viewModel.dailyRecipe {
-                    dailyRecipeCard(recipe)
-                } else if let error = viewModel.error {
-                    errorSection(error)
-                } else {
+                if !viewModel.recipes.isEmpty {
+                    recipeGrid
+                    feedFooter
+                } else if viewModel.error != nil {
+                    errorSection
+                } else if viewModel.hasNoMatches {
                     emptySection
+                } else {
+                    loadingGrid
                 }
             }
             .padding()
-            .padding(.bottom, 80) // Space for FAB
+            .padding(.bottom, 148) // Lets the last row scroll clear of the FABs
         }
         .refreshable {
-            // Start refresh in background task and return immediately
-            // This hides the pull-to-refresh spinner quickly
-            // App's custom loading indicator will show instead
-            Task { @MainActor in
-                await viewModel.refreshRecipe()
-                // Show alert if refresh failed but we still have old recipe
-                if let error = viewModel.error, viewModel.dailyRecipe != nil {
-                    refreshErrorMessage = error.userFriendlyMessage
-                    showRefreshError = true
-                }
-            }
+            await viewModel.refresh()
         }
-        .alert("Couldn't Refresh", isPresented: $showRefreshError) {
+        .alert("Couldn't Refresh", isPresented: $viewModel.showRefreshError) {
             Button("OK") {}
         } message: {
-            Text(refreshErrorMessage)
+            Text(viewModel.errorMessage)
         }
-        .alert("Daily Limit Reached", isPresented: $viewModel.showAdPrompt) {
-            Button("Watch Ad") {
-                viewModel.watchAdAndContinue()
-            }
-            Button("Upgrade to Premium") {
-                viewModel.showAdPrompt = false
-                showSubscription = true
-            }
-            Button("Cancel", role: .cancel) {
-                viewModel.dismissAdPrompt()
-            }
-        } message: {
-            Text("You've reached your daily limit. Watch a short ad to continue or upgrade to Premium for unlimited access.")
-        }
-        .alert("Ad Unavailable", isPresented: $viewModel.showAdError) {
-            Button("Try Again") {
-                viewModel.watchAdAndContinue()
-            }
-            Button("Upgrade to Premium") {
-                showSubscription = true
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(viewModel.adErrorMessage)
-        }
-        .sheet(isPresented: $showSubscription, onDismiss: {
-            // If user subscribed, try loading recipe again
-            if SubscriptionManager.shared.isPremium && viewModel.dailyRecipe == nil {
-                Task {
-                    await viewModel.loadDailyRecipe()
+    }
+
+    // MARK: - Recipe Grid
+
+    private var recipeGrid: some View {
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(viewModel.recipes) { recipe in
+                NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
+                    RecipeGridCard(recipe: recipe)
                 }
-            }
-        }) {
-            NavigationStack {
-                SubscriptionView()
-                    .environmentObject(UserDefaultsManager.shared)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button("Close") {
-                                showSubscription = false
-                            }
-                        }
+                .buttonStyle(.plain)
+                .onAppear {
+                    Task {
+                        await viewModel.loadMoreIfNeeded(after: recipe)
                     }
+                }
             }
         }
     }
 
-    // MARK: - Daily Recipe Card
-
-    private func dailyRecipeCard(_ recipe: Recipe) -> some View {
-        VStack(spacing: 12) {
-            NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Recipe Image — unified placeholder + animation + auto-polling
-                    RecipeImageView(
-                        recipeId: recipe.id,
-                        initialImageUrl: recipe.imageUrl,
-                        cornerRadius: 12
-                    )
-                    .frame(height: 200)
-
-                    // Recipe Info
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Today's Recipe")
-                            .font(.appCaption1)
-                            .foregroundColor(.brandGreen)
-                            .textCase(.uppercase)
-
-                        Text(recipe.name)
-                            .font(.appTitle3)
-                            .foregroundColor(.textPrimary)
-
-                        Text(recipe.shortDescription)
-                            .font(.appSubheadline)
-                            .foregroundColor(.textSecondary)
-                            .lineLimit(2)
-
-                        HStack(spacing: 16) {
-                            Label(recipe.cookingTime, systemImage: "clock")
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            Label(recipe.servings + " servings", systemImage: "person.2")
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            Label(recipe.difficulty, systemImage: "chart.bar")
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
-                        .font(.appCaption1)
-                        .foregroundColor(.textSecondary)
-                    }
-                }
-                .cardStyle()
-            }
-            .buttonStyle(.plain)
-
-            // Refresh hint
+    @ViewBuilder
+    private var feedFooter: some View {
+        if viewModel.isLoadingMore {
+            ProgressView()
+        } else if viewModel.loadMoreFailed {
             Button {
                 Task {
-                    await viewModel.refreshRecipe()
+                    await viewModel.loadMore()
                 }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12, weight: .medium))
-                    Text("Get new recipe")
+                    Text("Couldn't load more recipes. Try again")
                         .font(.appCaption1)
                 }
                 .foregroundColor(.textSecondary)
             }
-            .disabled(viewModel.isLoading)
-            .opacity(viewModel.isLoading ? 0.5 : 1)
         }
     }
 
-    // MARK: - Loading Section
+    // MARK: - Loading Grid
 
-    private var loadingSection: some View {
-        VStack(spacing: 20) {
-            // AI Animation
-            AIRecipeLoadingAnimation()
+    /// Placeholder cards shown while the first page loads.
+    private var loadingGrid: some View {
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(0..<HomeViewModel.pageSize, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 8) {
+                    LinearGradient(
+                        colors: [Color.placeholderBgTop, Color.placeholderBgBottom],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .aspectRatio(4 / 3, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
 
-            Text("AI is preparing your recipe...")
-                .font(.appSubheadline)
-                .foregroundColor(.textSecondary)
+                    Text("Recipe name")
+                        .font(.appSubheadline.weight(.semibold))
+                        .lineLimit(2, reservesSpace: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .redacted(reason: .placeholder)
+                }
+                .cardStyle(padding: 8)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
     }
 
     // MARK: - Empty Section
@@ -237,11 +161,11 @@ struct HomeView: View {
                 .font(.system(size: 60))
                 .foregroundColor(.brandGreen)
 
-            Text("No recipe available")
+            Text("No recipes for your preferences yet")
                 .font(.appHeadline)
                 .foregroundColor(.textPrimary)
 
-            Text("Take a photo of your ingredients to generate recipes!")
+            Text("Take a photo of your ingredients or describe a dish, and we'll make a recipe for you!")
                 .font(.appSubheadline)
                 .foregroundColor(.textSecondary)
                 .multilineTextAlignment(.center)
@@ -252,9 +176,9 @@ struct HomeView: View {
 
     // MARK: - Error Section
 
-    private func errorSection(_ error: Error) -> some View {
+    private var errorSection: some View {
         VStack(spacing: 16) {
-            Image(systemName: error.isNetworkUnavailable ? "wifi.slash" : "exclamationmark.triangle")
+            Image(systemName: viewModel.error?.isNetworkUnavailable == true ? "wifi.slash" : "exclamationmark.triangle")
                 .font(.system(size: 50))
                 .foregroundColor(.statusOrange)
 
@@ -262,14 +186,14 @@ struct HomeView: View {
                 .font(.appHeadline)
                 .foregroundColor(.textPrimary)
 
-            Text(error.userFriendlyMessage)
+            Text(viewModel.errorMessage)
                 .font(.appSubheadline)
                 .foregroundColor(.textSecondary)
                 .multilineTextAlignment(.center)
 
             Button("Try Again") {
                 Task {
-                    await viewModel.refreshRecipe()
+                    await viewModel.refresh()
                 }
             }
             .buttonStyle(.secondary)
@@ -316,6 +240,33 @@ struct HomeView: View {
                 .padding(.bottom, 24)
             }
         }
+    }
+}
+
+// MARK: - Recipe Grid Card
+
+/// One cell of the home feed: the picture with the name under it.
+private struct RecipeGridCard: View {
+    let recipe: Recipe
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            RecipeImageView(
+                recipeId: recipe.id,
+                initialImageUrl: recipe.imageUrl,
+                cornerRadius: 8
+            )
+            .aspectRatio(4 / 3, contentMode: .fit)
+
+            Text(recipe.name)
+                .font(.appSubheadline.weight(.semibold))
+                .foregroundColor(.textPrimary)
+                .multilineTextAlignment(.leading)
+                // Two lines even for a short name, so every card is the same height
+                .lineLimit(2, reservesSpace: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .cardStyle(padding: 8)
     }
 }
 

@@ -63,7 +63,6 @@ enum AppConfig {
     static let maxDailyRecipes = 6
     static let maxDailyButtonPresses = 2
     static let maxDailyCalories = 3
-    static let maxFreeHomeRecipeLoads = 10
     static let subscriptionCacheDurationSeconds: TimeInterval = 300 // 5 minutes
 
     // MARK: - HTTP Configuration

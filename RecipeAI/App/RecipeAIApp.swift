@@ -47,7 +47,7 @@ struct RecipeAIApp: App {
         }
 
         // Clear usage tracker
-        RecipeUsageTracker.shared.resetAll()
+        RecipeUsageTracker.shared.resetDailyUsage()
 
         // Clear subscription cache
         StoreKitManager.shared.resetOnSignOut()

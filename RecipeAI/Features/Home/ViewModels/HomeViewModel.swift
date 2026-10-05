@@ -1,171 +1,116 @@
 import Foundation
 import Combine
 
+/// The home feed: recipes from the catalog, loaded a page at a time as the
+/// user scrolls. Nothing here calls the AI.
 @MainActor
 final class HomeViewModel: ObservableObject {
-    @Published var dailyRecipe: Recipe?
-    @Published var isLoading = false
-    @Published var error: Error?
-    @Published var showAdPrompt = false
-    @Published var showAdError = false
-    @Published var adErrorMessage = ""
+    /// Recipes per request. Six cards fill a phone screen: three rows of two.
+    static let pageSize = 6
 
-    private let usageTracker = RecipeUsageTracker.shared
-    private let adManager = AdManager.shared
-    @Published private(set) var isRefreshing = false
-    private var pendingForceRefresh = false
+    @Published private(set) var recipes: [Recipe] = []
+    @Published private(set) var isLoading = false
+    @Published private(set) var isLoadingMore = false
+    @Published private(set) var loadMoreFailed = false
+    @Published private(set) var error: Error?
+    @Published var showRefreshError = false
 
-    func loadDailyRecipe(forceRefresh: Bool = false) async {
-        // Don't reload if we already have a recipe (unless forcing refresh)
-        guard dailyRecipe == nil || forceRefresh else { return }
+    /// What the recipes on screen were chosen for. Nil until a page has loaded.
+    private var loadedFilters: RecipeFeedFilters?
+    /// The server picks a seed for each new selection. Sending it back with an
+    /// offset returns the next page of that same selection.
+    private var seed = 0
+    private var nextOffset = 0
+    private var hasMore = false
+    /// Counts reloads, so that only the latest one updates the screen.
+    private var reloads = 0
 
-        // Prevent duplicate loads (but allow if forcing refresh)
-        guard !isLoading || forceRefresh else { return }
+    /// True when the catalog has nothing that fits the user's preferences.
+    var hasNoMatches: Bool {
+        loadedFilters != nil && recipes.isEmpty && !isLoading
+    }
 
-        let language = UserDefaultsManager.shared.selectedLanguage.rawValue
-
-        // Today's recipe was already generated — show it without another AI call.
-        if !forceRefresh, let cached = DailyRecipeCache.load(language: language) {
-            dailyRecipe = cached
-            return
+    var errorMessage: String {
+        guard let error, error.isNetworkUnavailable || error.isTimeoutError else {
+            return "We couldn't load recipes. Please try again."
         }
+        return error.userFriendlyMessage
+    }
 
-        // Pre-load ad in background for when user needs it
-        Task {
-            await adManager.loadRewardedAd()
-        }
+    /// Loads the feed when there is none yet, or when the language or the
+    /// food preferences have changed since it was loaded.
+    func loadIfNeeded() async {
+        guard !isLoading, loadedFilters != .current else { return }
+        await reload()
+    }
 
-        // The first recipe of the day is free. Only asking for a different one
-        // counts against the free limit.
-        let isReplacing = dailyRecipe != nil
-        guard !isReplacing || usageTracker.canLoadHomeRecipe else {
-            pendingForceRefresh = forceRefresh
-            showAdPrompt = true
-            return
+    /// Replaces the feed with a new selection.
+    func refresh() async {
+        // Not in the caller's task: SwiftUI can cancel a pull-to-refresh
+        // action when the view updates, and the request would go with it.
+        await Task { await reload() }.value
+    }
+
+    /// Called as each card appears. Asks for the next page as soon as a card
+    /// of the last one comes into view, so a page is always waiting below.
+    func loadMoreIfNeeded(after recipe: Recipe) async {
+        guard !loadMoreFailed, recipes.suffix(Self.pageSize).contains(recipe) else { return }
+        await loadMore()
+    }
+
+    func loadMore() async {
+        guard hasMore, !isLoadingMore, let filters = loadedFilters else { return }
+        let (seed, offset) = (seed, nextOffset)
+
+        isLoadingMore = true
+        loadMoreFailed = false
+        do {
+            let page = try await fetchPage(filters, seed: seed, offset: offset)
+            // A reload replaced the selection while this page was loading.
+            guard seed == self.seed, offset == nextOffset else { return }
+
+            let shown = Set(recipes.map(\.id))
+            recipes += (page.recipes ?? []).filter { !shown.contains($0.id) }
+            nextOffset = page.nextOffset
+            hasMore = page.hasMore
+        } catch {
+            guard seed == self.seed, offset == nextOffset else { return }
+            loadMoreFailed = true
         }
+        isLoadingMore = false
+    }
+
+    private func reload() async {
+        let filters = RecipeFeedFilters.current
+        reloads += 1
+        let reload = reloads
 
         isLoading = true
         error = nil
-
         do {
-            // Get user preferences for personalized recipe
-            let preferences = UserDefaultsManager.shared.getPreferences()
+            let page = try await fetchPage(filters, seed: 0, offset: 0)
+            guard reload == reloads else { return }
 
-            // Build form data for request
-            var formData: [String: String] = [:]
-            if let categories = preferences.categories, !categories.isEmpty {
-                formData["categories"] = categories.joined(separator: ",")
-            }
-            if let cuisines = preferences.cuisines, !cuisines.isEmpty {
-                formData["cuisine"] = cuisines.randomElement() ?? ""
-            }
-            formData["language"] = language
-
-            let response: SingleRecipeResponse = try await NetworkManager.shared.requestFormEncoded(
-                endpoint: .generateSingleRecipe,
-                formData: formData
-            )
-
-            if response.success, let recipe = response.recipe {
-                dailyRecipe = recipe
-                DailyRecipeCache.save(recipe, language: language)
-                if isReplacing {
-                    usageTracker.incrementHomeRecipeLoads()
-                }
-                error = nil
-            } else {
-                let errorMsg = response.message ?? "Unable to generate recipe"
-                error = RecipeError.generationFailed(errorMsg)
-            }
-
-            isLoading = false
+            recipes = page.recipes ?? []
+            seed = page.seed
+            nextOffset = page.nextOffset
+            hasMore = page.hasMore
+            loadedFilters = filters
+            isLoadingMore = false
+            loadMoreFailed = false
         } catch {
-            isLoading = false
-
-            // Ignore cancelled requests (NSURLErrorCancelled = -999)
-            let nsError = error as NSError
-            if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
-                return
-            }
-
-            // Check if wrapped in NetworkError
-            if let networkError = error as? NetworkError,
-               case .networkError(let underlying) = networkError {
-                let underlyingNSError = underlying as NSError
-                if underlyingNSError.domain == NSURLErrorDomain && underlyingNSError.code == NSURLErrorCancelled {
-                    return
-                }
-            }
-
+            guard reload == reloads else { return }
+            // The recipes already on screen stay there.
             self.error = error
+            showRefreshError = !recipes.isEmpty
         }
+        isLoading = false
     }
 
-    func refreshRecipe() async {
-        // Prevent duplicate refresh calls
-        guard !isRefreshing else { return }
-
-        isRefreshing = true
-        error = nil
-        await loadDailyRecipe(forceRefresh: true)
-        isRefreshing = false
-    }
-
-    // MARK: - Ad Handling
-
-    func watchAdAndContinue() {
-        // Dismiss the prompt immediately
-        showAdPrompt = false
-        let shouldForceRefresh = pendingForceRefresh
-
-        // Use retry logic to wait for alert to dismiss
-        adManager.showRewardedAdWhenReady(
-            onReward: { [weak self] in
-                guard let self = self else { return }
-                Task { @MainActor in
-                    // Grant extra load after watching ad (must be on main thread)
-                    self.usageTracker.grantExtraHomeRecipeLoad()
-                    // Continue loading recipe
-                    await self.loadDailyRecipe(forceRefresh: shouldForceRefresh)
-                }
-            },
-            onError: { [weak self] errorMessage in
-                Task { @MainActor in
-                    self?.adErrorMessage = errorMessage
-                    self?.showAdError = true
-                }
-            }
+    private func fetchPage(_ filters: RecipeFeedFilters, seed: Int, offset: Int) async throws -> RecipeFeedResponse {
+        try await NetworkManager.shared.get(
+            endpoint: .getRecipeFeed(filters: filters, seed: seed, offset: offset, limit: Self.pageSize)
         )
-    }
-
-    func dismissAdPrompt() {
-        showAdPrompt = false
-        pendingForceRefresh = false
-        error = RecipeError.generationFailed("Daily limit reached. Upgrade to Premium for unlimited recipes!")
-    }
-}
-
-/// Today's home recipe, kept so a cold launch shows it without another AI call.
-private struct DailyRecipeCache: Codable {
-    let recipe: Recipe
-    let language: String
-    let savedAt: Date
-
-    private static let key = "daily_recipe_cache"
-
-    static func load(language: String) -> Recipe? {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let cached = try? JSONDecoder().decode(DailyRecipeCache.self, from: data),
-              cached.language == language,
-              Calendar.current.isDateInToday(cached.savedAt) else {
-            return nil
-        }
-        return cached.recipe
-    }
-
-    static func save(_ recipe: Recipe, language: String) {
-        let cached = DailyRecipeCache(recipe: recipe, language: language, savedAt: Date())
-        UserDefaults.standard.set(try? JSONEncoder().encode(cached), forKey: key)
     }
 }
 
