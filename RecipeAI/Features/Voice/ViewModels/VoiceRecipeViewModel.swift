@@ -119,7 +119,7 @@ final class VoiceRecipeViewModel: NSObject, ObservableObject {
 
                     if result.isFinal {
                         self.isListening = false
-                        self.statusMessage = "Tap Generate or speak again"
+                        self.statusMessage = "Edit the text, tap Generate, or speak again"
                     }
                 }
 
@@ -156,7 +156,7 @@ final class VoiceRecipeViewModel: NSObject, ObservableObject {
         isListening = false
 
         if !transcribedText.isEmpty {
-            statusMessage = "Tap Generate or speak again"
+            statusMessage = "Edit the text, tap Generate, or speak again"
         } else {
             statusMessage = "Tap the mic to speak"
         }
@@ -167,7 +167,7 @@ final class VoiceRecipeViewModel: NSObject, ObservableObject {
     func generateRecipes() async -> [Recipe] {
         let prompt = transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else {
-            errorMessage = "Please speak a recipe request first"
+            errorMessage = "Please say or type a recipe request first"
             showError = true
             return []
         }

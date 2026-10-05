@@ -147,12 +147,17 @@ struct HomeView: View {
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .aspectRatio(4 / 3, contentMode: .fit)
+                    .aspectRatio(3 / 2, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
 
                     Text("Recipe name")
                         .font(.appSubheadline.weight(.semibold))
                         .lineLimit(2, reservesSpace: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .redacted(reason: .placeholder)
+
+                    Text("45 minutes")
+                        .font(.appCaption1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .redacted(reason: .placeholder)
                 }
@@ -253,7 +258,8 @@ struct HomeView: View {
 
 // MARK: - Recipe Grid Card
 
-/// One cell of the home feed: the picture with the name under it.
+/// One cell of the home feed: the picture, the name under it, then the
+/// cooking time and the servings.
 private struct RecipeGridCard: View {
     let recipe: Recipe
 
@@ -264,7 +270,7 @@ private struct RecipeGridCard: View {
                 initialImageUrl: recipe.imageUrl,
                 cornerRadius: 8
             )
-            .aspectRatio(4 / 3, contentMode: .fit)
+            .aspectRatio(3 / 2, contentMode: .fit)
 
             Text(recipe.name)
                 .font(.appSubheadline.weight(.semibold))
@@ -273,8 +279,30 @@ private struct RecipeGridCard: View {
                 // Two lines even for a short name, so every card is the same height
                 .lineLimit(2, reservesSpace: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 8) {
+                detail(recipe.cookingTime, icon: "clock")
+                detail(recipe.servings, icon: "person.2")
+            }
+            .font(.appCaption1)
+            .foregroundColor(.brandGreen)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .cardStyle(padding: 8)
+    }
+
+    /// A small icon with its value, kept on one line. Both have to fit side by
+    /// side in half the screen, so a long value shrinks a little.
+    @ViewBuilder
+    private func detail(_ value: String, icon: String) -> some View {
+        if !value.isEmpty {
+            HStack(spacing: 3) {
+                Image(systemName: icon)
+                Text(value)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
     }
 }
 
