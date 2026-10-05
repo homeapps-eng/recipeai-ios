@@ -113,6 +113,9 @@ final class VoiceRecipeViewModel: NSObject, ObservableObject {
         recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
             Task { @MainActor in
                 guard let self else { return }
+                // A result that arrives after listening was stopped must not
+                // replace the text, which the user may already be correcting.
+                guard self.isListening else { return }
 
                 if let result {
                     self.transcribedText = result.bestTranscription.formattedString
