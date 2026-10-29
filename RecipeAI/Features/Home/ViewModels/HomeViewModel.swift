@@ -5,8 +5,9 @@ import Combine
 /// user scrolls. Nothing here calls the AI.
 @MainActor
 final class HomeViewModel: ObservableObject {
-    /// Recipes per request. Six cards fill a phone screen: three rows of two.
-    static let pageSize = 6
+    /// Recipes per request. About two screens of the one-column feed, so the
+    /// next page is asked for well before the user reaches the end.
+    static let pageSize = 4
 
     @Published private(set) var recipes: [Recipe] = []
     @Published private(set) var isLoading = false
