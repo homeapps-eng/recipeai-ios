@@ -7,6 +7,7 @@ struct RecipeDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var isFavorite = false
     @State private var showShareSheet = false
+    @State private var showReport = false
 
     private var favoritesRepo: FavoritesRepository {
         FavoritesRepository(modelContext: modelContext)
@@ -62,7 +63,18 @@ struct RecipeDetailView: View {
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
+
+                // Flag AI-generated content (App Store and Google Play AI content rules)
+                Button {
+                    showReport = true
+                } label: {
+                    Image(systemName: "flag")
+                }
+                .accessibilityLabel("Report this recipe")
             }
+        }
+        .sheet(isPresented: $showReport) {
+            ReportContentView(subject: "Recipe: \(recipe.name) (id \(recipe.id))")
         }
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [createShareText()])

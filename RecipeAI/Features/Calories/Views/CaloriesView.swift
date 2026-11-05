@@ -3,6 +3,7 @@ import SwiftUI
 struct CaloriesView: View {
     let caloriesResponse: CaloriesResponse
     @State private var showShareSheet = false
+    @State private var showReport = false
 
     var body: some View {
         ScrollView {
@@ -35,13 +36,26 @@ struct CaloriesView: View {
         .navigationTitle("Nutrition Analysis")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {
                     showShareSheet = true
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
+
+                // Flag AI-generated content
+                Button {
+                    showReport = true
+                } label: {
+                    Image(systemName: "flag")
+                }
+                .accessibilityLabel("Report this estimate")
             }
+        }
+        .sheet(isPresented: $showReport) {
+            ReportContentView(
+                subject: "Calorie estimate: \(caloriesResponse.mealName ?? "meal") (\(caloriesResponse.totalCalories) kcal)"
+            )
         }
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [createShareText()])
