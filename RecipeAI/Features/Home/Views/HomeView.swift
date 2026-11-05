@@ -10,8 +10,11 @@ struct HomeView: View {
     @State private var generatedRecipes: [Recipe] = []
     @State private var caloriesResponse: CaloriesResponse?
 
-    // Two columns on a phone held upright, more where there is room for them.
-    private let columns = [GridItem(.adaptive(minimum: 160), spacing: 12)]
+    // One column on a phone held upright, so each picture gets the full width.
+    // Two or more on a phone turned sideways or an iPad, lined up at the top
+    // so the pictures in a row stay level when the names differ in length.
+    private let columns = [GridItem(.adaptive(minimum: 320), spacing: 16, alignment: .top)]
+    private let rowSpacing: CGFloat = 24
 
     var body: some View {
         NavigationStack {
@@ -99,7 +102,7 @@ struct HomeView: View {
     // MARK: - Recipe Grid
 
     private var recipeGrid: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
+        LazyVGrid(columns: columns, spacing: rowSpacing) {
             ForEach(viewModel.recipes) { recipe in
                 NavigationLink(destination: RecipeDetailView(recipe: recipe)) {
                     RecipeGridCard(recipe: recipe)
@@ -139,29 +142,27 @@ struct HomeView: View {
 
     /// Placeholder cards shown while the first page loads.
     private var loadingGrid: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
+        LazyVGrid(columns: columns, spacing: rowSpacing) {
             ForEach(0..<HomeViewModel.pageSize, id: \.self) { _ in
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
                     LinearGradient(
                         colors: [Color.placeholderBgTop, Color.placeholderBgBottom],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .aspectRatio(3 / 2, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .aspectRatio(RecipeGridCard.imageAspectRatio, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: RecipeGridCard.imageCornerRadius))
+                    .padding(.bottom, 6)
 
-                    Text("Recipe name")
-                        .font(.appSubheadline.weight(.semibold))
-                        .lineLimit(2, reservesSpace: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Recipe name goes here")
+                        .font(.appHeadline)
                         .redacted(reason: .placeholder)
 
-                    Text("45 minutes")
-                        .font(.appCaption1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("45 minutes · 4 servings")
+                        .font(.appSubheadline)
                         .redacted(reason: .placeholder)
                 }
-                .cardStyle(padding: 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -258,49 +259,53 @@ struct HomeView: View {
 
 // MARK: - Recipe Grid Card
 
-/// One cell of the home feed: the picture, the name under it, then the
-/// cooking time and the servings.
+/// One cell of the home feed: a large picture with rounded corners, the name
+/// under it, then the cooking time and the servings. There is no card around
+/// it: the picture itself is the card.
 private struct RecipeGridCard: View {
+    static let imageAspectRatio: CGFloat = 4 / 3
+    static let imageCornerRadius: CGFloat = 16
+
     let recipe: Recipe
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             RecipeImageView(
                 recipeId: recipe.id,
                 initialImageUrl: recipe.imageUrl,
-                cornerRadius: 8
+                cornerRadius: Self.imageCornerRadius
             )
-            .aspectRatio(3 / 2, contentMode: .fit)
+            .aspectRatio(Self.imageAspectRatio, contentMode: .fit)
+            .padding(.bottom, 6)
 
             Text(recipe.name)
-                .font(.appSubheadline.weight(.semibold))
+                .font(.appHeadline)
                 .foregroundColor(.textPrimary)
                 .multilineTextAlignment(.leading)
-                // Two lines even for a short name, so every card is the same height
-                .lineLimit(2, reservesSpace: true)
+                .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 14) {
                 detail(recipe.cookingTime, icon: "clock")
                 detail(recipe.servings, icon: "person.2")
             }
-            .font(.appCaption1)
-            .foregroundColor(.brandGreen)
+            .font(.appSubheadline)
+            .foregroundColor(.textSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .cardStyle(padding: 8)
+        // The space between the picture and the text opens the recipe too
+        .contentShape(Rectangle())
     }
 
-    /// A small icon with its value, kept on one line. Both have to fit side by
-    /// side in half the screen, so a long value shrinks a little.
+    /// A small green icon with its value in gray, kept on one line.
     @ViewBuilder
     private func detail(_ value: String, icon: String) -> some View {
         if !value.isEmpty {
-            HStack(spacing: 3) {
+            HStack(spacing: 4) {
                 Image(systemName: icon)
+                    .foregroundColor(.brandGreen)
                 Text(value)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
             }
         }
     }
