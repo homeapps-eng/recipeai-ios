@@ -3,6 +3,8 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var userDefaults: UserDefaultsManager
+    @ObservedObject private var aiConsent = AIConsent.shared
+    @ObservedObject private var adsConsent = AdsConsent.shared
     @State private var showDeleteConfirmation = false
     @State private var showChangePassword = false
     @State private var isLoading = false
@@ -18,6 +20,8 @@ struct SettingsView: View {
             preferencesSection
 
             // Account
+            privacySection
+
             accountSection
 
             // About
@@ -93,6 +97,28 @@ struct SettingsView: View {
                     Label("Delete Account", systemImage: "trash")
                 }
             }
+        }
+    }
+
+    // MARK: - Privacy Section
+
+    private var privacySection: some View {
+        Section {
+            Toggle("Use AI features", isOn: Binding(
+                get: { aiConsent.isGranted },
+                set: { $0 ? aiConsent.grant() : aiConsent.withdraw() }
+            ))
+
+            // Ad consent choices, where Google requires them (EEA, UK, Switzerland)
+            if adsConsent.isPrivacyOptionsRequired {
+                Button("Privacy choices") {
+                    Task { await adsConsent.presentPrivacyOptions() }
+                }
+            }
+        } header: {
+            Text("Privacy")
+        } footer: {
+            Text("AI features send your photos, requests and food preferences, including allergies, to \(AIConsent.providerName) to create recipes and estimate calories. Turn this off to stop it; the camera and voice features will ask again.")
         }
     }
 

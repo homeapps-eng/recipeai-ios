@@ -9,6 +9,9 @@ struct HomeView: View {
     @State private var showCalories = false
     @State private var generatedRecipes: [Recipe] = []
     @State private var caloriesResponse: CaloriesResponse?
+    /// The camera or voice screen to open once AI consent is given.
+    @State private var pendingAIFeature: (() -> Void)?
+    @State private var showAIConsent = false
 
     // One column on a phone held upright, so each picture gets the full width.
     // Two or more on a phone turned sideways or an iPad, lined up at the top
@@ -59,6 +62,23 @@ struct HomeView: View {
                 Task {
                     await viewModel.loadIfNeeded()
                 }
+            }
+            // Ad consent where the law requires it (EEA, UK, Switzerland); then ads start
+            .task {
+                await AdsConsent.shared.gatherAndStartAds()
+            }
+            // Permission to send photos, requests and food preferences to the AI service
+            .sheet(isPresented: $showAIConsent, onDismiss: {
+                if AIConsent.shared.isGranted { pendingAIFeature?() }
+                pendingAIFeature = nil
+            }) {
+                AIConsentView(
+                    onAllow: {
+                        AIConsent.shared.grant()
+                        showAIConsent = false
+                    },
+                    onDecline: { showAIConsent = false }
+                )
             }
             // The first-launch language picker sits on top of this screen, so
             // choosing a language there does not make the screen appear again.
@@ -226,7 +246,7 @@ struct HomeView: View {
                 VStack(spacing: 16) {
                     // Voice FAB
                     Button {
-                        showVoice = true
+                        withAIConsent { showVoice = true }
                     } label: {
                         Image(systemName: "mic.fill")
                             .font(.title2)
@@ -239,7 +259,7 @@ struct HomeView: View {
 
                     // Camera FAB
                     Button {
-                        showCamera = true
+                        withAIConsent { showCamera = true }
                     } label: {
                         Image(systemName: "camera.fill")
                             .font(.title2)
@@ -253,6 +273,17 @@ struct HomeView: View {
                 .padding(.trailing, 24)
                 .padding(.bottom, 24)
             }
+        }
+    }
+
+    /// Opens an AI feature, asking permission first if the user hasn't given it
+    /// (App Review guideline 5.1.2(i)).
+    private func withAIConsent(_ open: @escaping () -> Void) {
+        if AIConsent.shared.isGranted {
+            open()
+        } else {
+            pendingAIFeature = open
+            showAIConsent = true
         }
     }
 }

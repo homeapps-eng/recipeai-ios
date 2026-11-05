@@ -18,6 +18,7 @@ final class AdManager: NSObject, ObservableObject {
     private var errorCallback: ((String) -> Void)?
     private var isShowingAd = false
     private var rewardEarned = false
+    private var isConfigured = false
 
     private override init() {
         super.init()
@@ -25,7 +26,10 @@ final class AdManager: NSObject, ObservableObject {
 
     // MARK: - Initialization
 
+    /// Starts the Mobile Ads SDK, once. Called by `AdsConsent` when consent allows ads.
     func configure() {
+        guard !isConfigured, AdsConsent.shared.canRequestAds else { return }
+        isConfigured = true
         MobileAds.shared.start { _ in
             Task {
                 await self.loadRewardedAd()
@@ -50,7 +54,7 @@ final class AdManager: NSObject, ObservableObject {
     // MARK: - Load Rewarded Ad
 
     func loadRewardedAd() async {
-        guard !isLoading else { return }
+        guard !isLoading, AdsConsent.shared.canRequestAds else { return }
 
         isLoading = true
         error = nil
@@ -143,6 +147,13 @@ final class AdManager: NSObject, ObservableObject {
         onError: @escaping (String) -> Void,
         retryCount: Int = 0
     ) {
+        // Without consent (where it's required), no ad can be requested
+        guard AdsConsent.shared.canRequestAds else {
+            onError("Ads aren't available right now. Please try again later.")
+            return
+        }
+        configure()
+
         // Request ATT before first ad (contextual, better opt-in rate)
         if ATTrackingManager.trackingAuthorizationStatus == .notDetermined {
             Task {
