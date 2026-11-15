@@ -245,6 +245,8 @@ struct CameraView: View {
     private func calculateCalories() async {
         if let response = await viewModel.calculateCalories() {
             onCaloriesCalculated(response)
+            // A finished scan is a good moment to ask for a rating (rules in ReviewPrompter).
+            ReviewPrompter.record(.calorieScan)
         }
     }
 }

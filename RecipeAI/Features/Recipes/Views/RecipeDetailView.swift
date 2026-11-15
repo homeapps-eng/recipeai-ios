@@ -209,6 +209,11 @@ struct RecipeDetailView: View {
         isFavorite.toggle()
         favoritesRepo.toggleFavorite(recipe)
 
+        // Saving a recipe is a good moment to ask for a rating (rules in ReviewPrompter).
+        if isFavorite {
+            ReviewPrompter.record(.savedRecipe)
+        }
+
         // Sync with backend
         if let userId = UserDefaultsManager.shared.userId {
             Task {
